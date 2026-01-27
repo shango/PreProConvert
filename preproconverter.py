@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Multi-Format Scene Converter - Main Orchestrator Module
+PreProConverter - Multi-Format Scene Converter
 Coordinates multi-format export using modular readers and exporters
 Supports Alembic (.abc) and USD (.usd, .usda, .usdc) input
 
@@ -20,7 +20,7 @@ from exporters.maya_ma_exporter import MayaMAExporter
 from exporters.fbx_exporter import FBXExporter
 
 
-class AlembicToJSXConverter:
+class PreProConverter:
     """Multi-format scene converter (orchestrator/facade)
 
     This class coordinates the conversion process:
@@ -93,7 +93,7 @@ class AlembicToJSXConverter:
             format_name = "Alembic" if file_type == 'alembic' else "USD"
 
             self.log(f"\n{'='*60}", progress=0)
-            self.log(f"MultiConverter v2.6.2 - VFX-Experts")
+            self.log(f"PreProConverter v2.6.2 - VFX-Experts")
             self.log(f"{'='*60}")
             self.log(f"Input: {input_file} ({format_name})")
             self.log(f"Output: {output_dir}")

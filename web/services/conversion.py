@@ -8,7 +8,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from alembic_converter import AlembicToJSXConverter
+from preproconverter import PreProConverter
 from web.models.job import ConvertRequest, JobStatus
 from web.services.job_manager import job_manager
 from web.services.file_manager import file_manager
@@ -82,7 +82,7 @@ class ConversionService:
     def _run_conversion(self, job, options: ConvertRequest, progress_callback) -> dict:
         """Run conversion synchronously (called in thread pool)"""
         try:
-            converter = AlembicToJSXConverter(progress_callback=progress_callback)
+            converter = PreProConverter(progress_callback=progress_callback)
 
             results = converter.convert_multi_format(
                 input_file=job.input_path,
