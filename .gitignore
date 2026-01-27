@@ -8,9 +8,20 @@ __pycache__/
 .venv
 venv/
 ENV/
+*.egg-info/
+dist/
+build/
 
 # Work directories
 multiconverter_work/
+uploads/
+output/
+temp/
+tmp/
+
+# Logs
+*.log
+logs/
 
 # IDE
 .vscode/
@@ -21,3 +32,12 @@ multiconverter_work/
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local config
+.env.local
+*.local
