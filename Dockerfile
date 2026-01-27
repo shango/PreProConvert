@@ -4,9 +4,10 @@ FROM aswf/ci-vfxall:2023-clang15.2
 
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies (with cache mount for faster rebuilds)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Copy application code
 COPY . .
