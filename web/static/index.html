@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PreProConvert</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --success: #4ade80;
+            --border: #333;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        /* Dropzone */
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            background: var(--bg-secondary);
+            cursor: pointer;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent);
+            background: var(--bg-tertiary);
+        }
+
+        .dropzone h2 {
+            margin-bottom: 0.5rem;
+        }
+
+        .dropzone p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .dropzone input[type="file"] {
+            display: none;
+        }
+
+        /* Sections */
+        .section {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .section h3 {
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* File info */
+        .file-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .file-name {
+            font-weight: bold;
+        }
+
+        .file-meta {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* Checkboxes */
+        .format-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .format-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .format-option:hover {
+            background: var(--bg-primary);
+        }
+
+        .format-option input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+        }
+
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        .btn-success {
+            background: var(--success);
+        }
+
+        .btn-success:hover {
+            background: #22c55e;
+        }
+
+        /* Progress */
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.indeterminate {
+            width: 30%;
+            animation: indeterminate 1.5s infinite ease-in-out;
+        }
+
+        @keyframes indeterminate {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        .progress-log {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .progress-log .message {
+            padding: 0.25rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .progress-log .message:last-child {
+            border-bottom: none;
+            color: var(--text-primary);
+        }
+
+        /* Status */
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-pending { background: var(--border); }
+        .status-converting { background: var(--accent); }
+        .status-completed { background: var(--success); color: #000; }
+        .status-failed { background: #ef4444; }
+
+        /* Error */
+        .error-message {
+            background: #7f1d1d;
+            color: #fecaca;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PreProConvert</h1>
+        <p class="subtitle">Convert Alembic, USD, and Maya files</p>
+
+        <!-- Dropzone -->
+        <div id="dropzone" class="dropzone">
+            <h2>Drag & Drop Scene File</h2>
+            <p>.abc, .usd, .usda, .usdc, .ma</p>
+            <input type="file" id="fileInput" accept=".abc,.usd,.usda,.usdc,.ma">
+        </div>
+
+        <!-- Options Section -->
+        <div id="optionsSection" class="section hidden">
+            <div class="file-info">
+                <div>
+                    <div class="file-name" id="fileName">scene.abc</div>
+                    <div class="file-meta" id="fileMeta">Alembic | 120 frames | 24 fps</div>
+                </div>
+                <span class="status-badge status-pending" id="statusBadge">Ready</span>
+            </div>
+
+            <h3>Export Formats</h3>
+            <div class="format-options">
+                <label class="format-option">
+                    <input type="checkbox" name="export_ae" checked>
+                    After Effects
+                </label>
+                <label class="format-option">
+                    <input type="checkbox" name="export_usd" checked>
+                    USD
+                </label>
+                <label class="format-option">
+                    <input type="checkbox" name="export_maya_ma" checked>
+                    Maya MA
+                </label>
+                <label class="format-option">
+                    <input type="checkbox" name="export_fbx" checked>
+                    FBX
+                </label>
+            </div>
+
+            <button id="convertBtn" class="btn btn-block">Convert</button>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progressSection" class="section hidden">
+            <h3>Converting...</h3>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill indeterminate"></div>
+            </div>
+            <div id="progressLog" class="progress-log"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="section hidden">
+            <h3>Conversion Complete!</h3>
+            <a id="downloadBtn" href="#" class="btn btn-success btn-block">Download Results (ZIP)</a>
+            <button id="newConversionBtn" class="btn btn-block" style="margin-top: 1rem;">New Conversion</button>
+        </div>
+
+        <!-- Error Section -->
+        <div id="errorSection" class="section hidden">
+            <h3>Conversion Failed</h3>
+            <div id="errorMessage" class="error-message"></div>
+            <button id="retryBtn" class="btn btn-block" style="margin-top: 1rem;">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentJobId = null;
+        let eventSource = null;
+
+        // Elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const optionsSection = document.getElementById('optionsSection');
+        const progressSection = document.getElementById('progressSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const errorSection = document.getElementById('errorSection');
+        const fileName = document.getElementById('fileName');
+        const fileMeta = document.getElementById('fileMeta');
+        const statusBadge = document.getElementById('statusBadge');
+        const convertBtn = document.getElementById('convertBtn');
+        const progressFill = document.getElementById('progressFill');
+        const progressLog = document.getElementById('progressLog');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Drag and drop handlers
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadFile(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) uploadFile(file);
+        });
+
+        // Upload file
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                dropzone.innerHTML = '<h2>Uploading...</h2>';
+
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
+                }
+
+                const data = await response.json();
+                currentJobId = data.job_id;
+
+                // Update UI
+                fileName.textContent = data.filename;
+                fileMeta.textContent = `${data.format} | ${data.detected_frames || '?'} frames | ${data.detected_fps || 24} fps`;
+
+                showSection('options');
+                resetDropzone();
+
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+                resetDropzone();
+            }
+        }
+
+        // Start conversion
+        convertBtn.addEventListener('click', async () => {
+            if (!currentJobId) return;
+
+            const options = {
+                shot_name: 'shot_001',
+                fps: 24,
+                export_ae: document.querySelector('[name="export_ae"]').checked,
+                export_usd: document.querySelector('[name="export_usd"]').checked,
+                export_maya_ma: document.querySelector('[name="export_maya_ma"]').checked,
+                export_fbx: document.querySelector('[name="export_fbx"]').checked
+            };
+
+            try {
+                const response = await fetch(`/api/jobs/${currentJobId}/convert`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(options)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to start conversion');
+                }
+
+                showSection('progress');
+                startProgressStream();
+
+            } catch (error) {
+                alert('Failed to start conversion: ' + error.message);
+            }
+        });
+
+        // Progress streaming
+        function startProgressStream() {
+            progressLog.innerHTML = '';
+
+            eventSource = new EventSource(`/api/jobs/${currentJobId}/progress`);
+
+            eventSource.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                addProgressMessage(data.message);
+            };
+
+            eventSource.addEventListener('complete', (e) => {
+                eventSource.close();
+                const data = JSON.parse(e.data);
+
+                if (data.status === 'completed') {
+                    downloadBtn.href = `/api/jobs/${currentJobId}/download`;
+                    showSection('results');
+                } else {
+                    errorMessage.textContent = data.error || 'Unknown error occurred';
+                    showSection('error');
+                }
+            });
+
+            eventSource.onerror = () => {
+                eventSource.close();
+                // Check job status
+                checkJobStatus();
+            };
+        }
+
+        function addProgressMessage(message) {
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.textContent = message;
+            progressLog.appendChild(div);
+            progressLog.scrollTop = progressLog.scrollHeight;
+        }
+
+        async function checkJobStatus() {
+            try {
+                const response = await fetch(`/api/jobs/${currentJobId}`);
+                const data = await response.json();
+
+                if (data.status === 'completed') {
+                    downloadBtn.href = `/api/jobs/${currentJobId}/download`;
+                    showSection('results');
+                } else if (data.status === 'failed') {
+                    errorMessage.textContent = data.error || 'Unknown error occurred';
+                    showSection('error');
+                }
+            } catch (error) {
+                console.error('Failed to check job status:', error);
+            }
+        }
+
+        // New conversion / retry
+        document.getElementById('newConversionBtn').addEventListener('click', resetApp);
+        document.getElementById('retryBtn').addEventListener('click', resetApp);
+
+        function resetApp() {
+            currentJobId = null;
+            if (eventSource) eventSource.close();
+            showSection('dropzone');
+        }
+
+        // Helpers
+        function showSection(section) {
+            dropzone.classList.toggle('hidden', section !== 'dropzone');
+            optionsSection.classList.toggle('hidden', section !== 'options');
+            progressSection.classList.toggle('hidden', section !== 'progress');
+            resultsSection.classList.toggle('hidden', section !== 'results');
+            errorSection.classList.toggle('hidden', section !== 'error');
+        }
+
+        function resetDropzone() {
+            dropzone.innerHTML = `
+                <h2>Drag & Drop Scene File</h2>
+                <p>.abc, .usd, .usda, .usdc, .ma</p>
+                <input type="file" id="fileInput" accept=".abc,.usd,.usda,.usdc,.ma">
+            `;
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) uploadFile(file);
+            });
+        }
+    </script>
+</body>
+</html>
