@@ -7,3 +7,6 @@ aiofiles>=23.0.0
 # Core conversion dependencies
 # Note: PyAlembic and imath are provided by the ASWF Docker image
 numpy>=1.24.0
+
+# USD Python bindings for USD export
+usd-core>=24.3

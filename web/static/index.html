@@ -324,6 +324,7 @@
         // State
         let currentJobId = null;
         let eventSource = null;
+        let uploadedBaseName = null;  // Store filename without extension for output naming
 
         // Elements
         const dropzone = document.getElementById('dropzone');
@@ -386,6 +387,9 @@
                 const data = await response.json();
                 currentJobId = data.job_id;
 
+                // Store base filename (without extension) for output naming
+                uploadedBaseName = data.filename.replace(/\.[^/.]+$/, '');
+
                 // Update UI
                 fileName.textContent = data.filename;
                 fileMeta.textContent = `${data.format} | ${data.detected_frames || '?'} frames | ${data.detected_fps || 24} fps`;
@@ -404,7 +408,7 @@
             if (!currentJobId) return;
 
             const options = {
-                shot_name: 'shot_001',
+                shot_name: uploadedBaseName + '_conv',
                 fps: 24,
                 export_ae: document.querySelector('[name="export_ae"]').checked,
                 export_usd: document.querySelector('[name="export_usd"]').checked,
@@ -449,10 +453,11 @@
 
                 if (data.status === 'completed') {
                     downloadBtn.href = `/api/jobs/${currentJobId}/download`;
-                    showSection('results');
+                    // Show results while keeping progress log visible
+                    showSectionWithLog('results');
                 } else {
                     errorMessage.textContent = data.error || 'Unknown error occurred';
-                    showSection('error');
+                    showSectionWithLog('error');
                 }
             });
 
@@ -478,10 +483,10 @@
 
                 if (data.status === 'completed') {
                     downloadBtn.href = `/api/jobs/${currentJobId}/download`;
-                    showSection('results');
+                    showSectionWithLog('results');
                 } else if (data.status === 'failed') {
                     errorMessage.textContent = data.error || 'Unknown error occurred';
-                    showSection('error');
+                    showSectionWithLog('error');
                 }
             } catch (error) {
                 console.error('Failed to check job status:', error);
@@ -505,6 +510,18 @@
             progressSection.classList.toggle('hidden', section !== 'progress');
             resultsSection.classList.toggle('hidden', section !== 'results');
             errorSection.classList.toggle('hidden', section !== 'error');
+        }
+
+        // Show section while keeping progress log visible
+        function showSectionWithLog(section) {
+            dropzone.classList.add('hidden');
+            optionsSection.classList.add('hidden');
+            progressSection.classList.remove('hidden');  // Keep log visible
+            resultsSection.classList.toggle('hidden', section !== 'results');
+            errorSection.classList.toggle('hidden', section !== 'error');
+            // Update progress section title to indicate completion
+            const progressTitle = progressSection.querySelector('h3');
+            if (progressTitle) progressTitle.textContent = 'Conversion Log';
         }
 
         function resetDropzone() {
