@@ -35,6 +35,17 @@ MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     logger.info("PreProConvert starting...")
+    logger.info("Checking VFX library imports...")
+    try:
+        import alembic
+        logger.info(f"PyAlembic loaded: {alembic.__file__}")
+    except ImportError as e:
+        logger.error(f"PyAlembic not available: {e}")
+    try:
+        import imath
+        logger.info(f"imath loaded: {imath.__file__}")
+    except ImportError as e:
+        logger.error(f"imath not available: {e}")
     yield
     logger.info("PreProConvert shutting down...")
 
@@ -233,6 +244,14 @@ async def serve_frontend():
     if index_path.exists():
         return index_path.read_text()
     return HTMLResponse(content="<h1>PreProConvert</h1><p>Frontend not found</p>")
+
+
+# === HEALTH CHECK ===
+
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint"""
+    return {"status": "ok"}
 
 
 # === INFO ENDPOINT ===
