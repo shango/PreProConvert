@@ -58,15 +58,26 @@ class JobManager:
                 job.error = error
             logger.info(f"Job {job_id} status: {status.value}")
 
-    def add_progress(self, job_id: str, message: str):
-        """Add progress message (thread-safe)"""
+    def add_progress(self, job_id: str, message: str, progress: int = None):
+        """Add progress message with optional percentage (thread-safe)
+
+        Args:
+            job_id: Job ID
+            message: Progress message
+            progress: Optional progress percentage (0-100)
+        """
         job = self._jobs.get(job_id)
         if job:
             job.progress_messages.append(message)
+            if progress is not None:
+                job.progress_percent = progress
 
         queue = self._progress_queues.get(job_id)
         if queue:
-            queue.put({"message": message})
+            data = {"message": message}
+            if progress is not None:
+                data["progress"] = progress
+            queue.put(data)
 
     def get_progress_queue(self, job_id: str) -> Optional[Queue]:
         """Get progress queue for SSE streaming"""

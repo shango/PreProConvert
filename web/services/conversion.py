@@ -40,9 +40,9 @@ class ConversionService:
         # Update status to converting
         job_manager.update_status(job_id, JobStatus.CONVERTING)
 
-        def progress_callback(message: str):
-            """Thread-safe progress callback"""
-            job_manager.add_progress(job_id, message)
+        def progress_callback(message: str, progress: int = None):
+            """Thread-safe progress callback with optional percentage"""
+            job_manager.add_progress(job_id, message, progress)
 
         try:
             # Run conversion in thread pool (blocking I/O)
@@ -62,7 +62,7 @@ class ConversionService:
                     job_manager.set_zip_path(job_id, zip_path)
 
                 job_manager.update_status(job_id, JobStatus.COMPLETED)
-                job_manager.add_progress(job_id, "Conversion complete!")
+                job_manager.add_progress(job_id, "Conversion complete!", progress=100)
                 job_manager.signal_complete(job_id)
                 return True
             else:

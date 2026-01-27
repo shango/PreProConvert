@@ -6,15 +6,17 @@
     <title>PreProConvert</title>
     <style>
         :root {
-            --bg-primary: #1a1a2e;
-            --bg-secondary: #16213e;
-            --bg-tertiary: #0f3460;
-            --accent: #e94560;
-            --accent-hover: #ff6b6b;
-            --text-primary: #eee;
-            --text-secondary: #aaa;
+            /* Slate Color Palette - Dark Theme */
+            --bg-primary: #2B3A4A;      /* Dark navy from image background */
+            --bg-secondary: #364858;    /* Slightly lighter navy for cards */
+            --bg-tertiary: #5B7FA7;     /* Slate blue for interactive elements */
+            --accent: #A5DEF1;          /* Light blue - for highlights */
+            --accent-hover: #8dcbe3;    /* Slightly darker light blue for hover */
+            --text-primary: #FFFFFF;    /* White for primary text */
+            --text-secondary: #a8c0d0;  /* Muted blue-gray for secondary text */
             --success: #4ade80;
-            --border: #333;
+            --border: #4a6278;
+            --teal: #508DA3;            /* Teal for subtle accents */
         }
 
         * {
@@ -39,7 +41,7 @@
         h1 {
             text-align: center;
             margin-bottom: 0.5rem;
-            color: var(--accent);
+            color: var(--text-primary);
         }
 
         .subtitle {
@@ -87,7 +89,7 @@
 
         .section h3 {
             margin-bottom: 1rem;
-            color: var(--accent);
+            color: var(--text-primary);
         }
 
         .hidden {
@@ -139,14 +141,14 @@
         .format-option input[type="checkbox"] {
             width: 18px;
             height: 18px;
-            accent-color: var(--accent);
+            accent-color: var(--teal);
         }
 
         /* Buttons */
         .btn {
             display: inline-block;
             padding: 0.75rem 2rem;
-            background: var(--accent);
+            background: var(--teal);
             color: white;
             border: none;
             border-radius: 8px;
@@ -158,7 +160,8 @@
         }
 
         .btn:hover {
-            background: var(--accent-hover);
+            background: var(--accent);
+            color: var(--bg-primary);
         }
 
         .btn:disabled {
@@ -180,19 +183,34 @@
         }
 
         /* Progress */
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-percent {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
         .progress-bar {
-            height: 8px;
-            background: var(--bg-tertiary);
-            border-radius: 4px;
+            height: 12px;
+            background: var(--bg-primary);
+            border-radius: 6px;
             overflow: hidden;
             margin-bottom: 1rem;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
         }
 
         .progress-fill {
             height: 100%;
-            background: var(--accent);
+            background: linear-gradient(90deg, var(--teal), var(--accent));
             width: 0%;
             transition: width 0.3s ease;
+            border-radius: 6px;
         }
 
         .progress-fill.indeterminate {
@@ -205,10 +223,15 @@
             100% { transform: translateX(400%); }
         }
 
+        .log-container {
+            position: relative;
+        }
+
         .progress-log {
             background: var(--bg-primary);
             border-radius: 8px;
             padding: 1rem;
+            padding-bottom: 2.5rem;
             max-height: 200px;
             overflow-y: auto;
             font-family: monospace;
@@ -226,6 +249,32 @@
             color: var(--text-primary);
         }
 
+        .copy-btn {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            padding: 0.35rem 0.75rem;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent);
+            color: var(--bg-primary);
+            border-color: var(--accent);
+        }
+
+        .copy-btn.copied {
+            background: var(--success);
+            color: #000;
+            border-color: var(--success);
+        }
+
         /* Status */
         .status-badge {
             display: inline-block;
@@ -237,7 +286,7 @@
         }
 
         .status-pending { background: var(--border); }
-        .status-converting { background: var(--accent); }
+        .status-converting { background: var(--teal); }
         .status-completed { background: var(--success); color: #000; }
         .status-failed { background: #ef4444; }
 
@@ -298,11 +347,17 @@
 
         <!-- Progress Section -->
         <div id="progressSection" class="section hidden">
-            <h3>Converting...</h3>
+            <div class="progress-header">
+                <h3 id="progressTitle">Converting...</h3>
+                <span id="progressPercent" class="progress-percent">0%</span>
+            </div>
             <div class="progress-bar">
                 <div id="progressFill" class="progress-fill indeterminate"></div>
             </div>
-            <div id="progressLog" class="progress-log"></div>
+            <div class="log-container">
+                <div id="progressLog" class="progress-log"></div>
+                <button id="copyLogBtn" class="copy-btn" onclick="copyLogs()">Copy Logs</button>
+            </div>
         </div>
 
         <!-- Results Section -->
@@ -339,6 +394,8 @@
         const convertBtn = document.getElementById('convertBtn');
         const progressFill = document.getElementById('progressFill');
         const progressLog = document.getElementById('progressLog');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressTitle = document.getElementById('progressTitle');
         const downloadBtn = document.getElementById('downloadBtn');
         const errorMessage = document.getElementById('errorMessage');
 
@@ -439,12 +496,21 @@
         // Progress streaming
         function startProgressStream() {
             progressLog.innerHTML = '';
+            progressFill.classList.add('indeterminate');
+            progressFill.style.width = '0%';
+            progressPercent.textContent = '0%';
+            progressTitle.textContent = 'Converting...';
 
             eventSource = new EventSource(`/api/jobs/${currentJobId}/progress`);
 
             eventSource.onmessage = (e) => {
                 const data = JSON.parse(e.data);
                 addProgressMessage(data.message);
+
+                // Update progress bar if percentage is provided
+                if (data.progress !== undefined && data.progress !== null) {
+                    updateProgress(data.progress);
+                }
             };
 
             eventSource.addEventListener('complete', (e) => {
@@ -474,6 +540,32 @@
             div.textContent = message;
             progressLog.appendChild(div);
             progressLog.scrollTop = progressLog.scrollHeight;
+        }
+
+        function updateProgress(percent) {
+            // Remove indeterminate animation and set actual width
+            progressFill.classList.remove('indeterminate');
+            progressFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+            progressPercent.textContent = `${percent}%`;
+        }
+
+        function copyLogs() {
+            const messages = Array.from(progressLog.querySelectorAll('.message'))
+                .map(el => el.textContent)
+                .join('\n');
+
+            navigator.clipboard.writeText(messages).then(() => {
+                const copyBtn = document.getElementById('copyLogBtn');
+                copyBtn.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+                setTimeout(() => {
+                    copyBtn.textContent = 'Copy Logs';
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy logs:', err);
+                alert('Failed to copy logs to clipboard');
+            });
         }
 
         async function checkJobStatus() {
@@ -520,8 +612,11 @@
             resultsSection.classList.toggle('hidden', section !== 'results');
             errorSection.classList.toggle('hidden', section !== 'error');
             // Update progress section title to indicate completion
-            const progressTitle = progressSection.querySelector('h3');
-            if (progressTitle) progressTitle.textContent = 'Conversion Log';
+            progressTitle.textContent = 'Conversion Log';
+            // Ensure progress bar shows 100% on completion
+            if (section === 'results') {
+                updateProgress(100);
+            }
         }
 
         function resetDropzone() {

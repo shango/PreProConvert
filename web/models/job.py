@@ -73,6 +73,7 @@ class Job:
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         self.progress_messages: List[str] = []
+        self.progress_percent: int = 0
         self.error: Optional[str] = None
         self.detected_frames: Optional[int] = None
         self.detected_fps: Optional[float] = None

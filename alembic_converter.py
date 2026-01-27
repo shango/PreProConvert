@@ -44,14 +44,19 @@ class AlembicToJSXConverter:
 
         Args:
             progress_callback: Optional function to call for progress updates
-                              Signature: callback(message: str) -> None
+                              Signature: callback(message: str, progress: int = None) -> None
         """
         self.progress_callback = progress_callback
 
-    def log(self, message):
-        """Send progress updates to callback"""
+    def log(self, message, progress=None):
+        """Send progress updates to callback
+
+        Args:
+            message: Progress message
+            progress: Optional progress percentage (0-100)
+        """
         if self.progress_callback:
-            self.progress_callback(message)
+            self.progress_callback(message, progress)
         print(message)
 
     def convert_multi_format(self, input_file, output_dir, shot_name, fps=24, frame_count=None,
@@ -87,7 +92,7 @@ class AlembicToJSXConverter:
             file_type = get_file_type(str(input_path))
             format_name = "Alembic" if file_type == 'alembic' else "USD"
 
-            self.log(f"\n{'='*60}")
+            self.log(f"\n{'='*60}", progress=0)
             self.log(f"MultiConverter v2.6.2 - VFX-Experts")
             self.log(f"{'='*60}")
             self.log(f"Input: {input_file} ({format_name})")
@@ -103,8 +108,12 @@ class AlembicToJSXConverter:
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
 
+            # Calculate number of selected exports for progress distribution
+            selected_exports = sum([export_ae, export_usd, export_maya_ma, export_fbx])
+            export_progress_per_format = 65 // max(selected_exports, 1)  # 30-95% for exports
+
             # Step 1: Read input file ONCE (auto-detect format)
-            self.log(f"Step 1/4: Reading {format_name} file...")
+            self.log(f"Step 1/4: Reading {format_name} file...", progress=5)
             reader = create_reader(input_file)
 
             # Auto-detect frame count if not provided
@@ -114,10 +123,10 @@ class AlembicToJSXConverter:
             else:
                 self.log(f"  Frame count: {frame_count}")
 
-            self.log(f"  FPS: {fps}")
+            self.log(f"  FPS: {fps}", progress=10)
 
             # Step 2: Extract all scene data ONCE (includes animation analysis)
-            self.log("\nStep 2/4: Extracting scene data and analyzing animation...")
+            self.log("\nStep 2/4: Extracting scene data and analyzing animation...", progress=15)
             scene_data = reader.extract_scene_data(fps, frame_count)
 
             # Log animation summary
@@ -135,38 +144,52 @@ class AlembicToJSXConverter:
                     self.log(f"    - {name}")
 
             # Step 3: Export to selected formats
-            self.log("\nStep 3/4: Exporting to selected formats...")
+            self.log("\nStep 3/4: Exporting to selected formats...", progress=30)
+
+            current_export = 0
 
             # Export to After Effects
             if export_ae:
-                self.log(f"\n--- After Effects Export ---")
+                current_export += 1
+                progress = 30 + (current_export * export_progress_per_format)
+                self.log(f"\n--- After Effects Export ---", progress=progress - export_progress_per_format + 5)
                 ae_dir = output_path / f"{shot_name}_ae"
                 exporter = AfterEffectsExporter(self.progress_callback)
                 results['ae'] = exporter.export(scene_data, ae_dir, shot_name)
+                self.log(f"After Effects export complete", progress=progress)
 
             # Export to USD
             if export_usd:
-                self.log(f"\n--- USD Export ---")
+                current_export += 1
+                progress = 30 + (current_export * export_progress_per_format)
+                self.log(f"\n--- USD Export ---", progress=progress - export_progress_per_format + 5)
                 usd_dir = output_path / f"{shot_name}_usd"
                 exporter = USDExporter(self.progress_callback)
                 results['usd'] = exporter.export(scene_data, usd_dir, shot_name)
+                self.log(f"USD export complete", progress=progress)
 
             # Export to Maya MA
             if export_maya_ma:
-                self.log(f"\n--- Maya MA Export ---")
+                current_export += 1
+                progress = 30 + (current_export * export_progress_per_format)
+                self.log(f"\n--- Maya MA Export ---", progress=progress - export_progress_per_format + 5)
                 maya_dir = output_path / f"{shot_name}_maya"
                 exporter = MayaMAExporter(self.progress_callback)
                 results['maya_ma'] = exporter.export(scene_data, maya_dir, shot_name)
+                self.log(f"Maya MA export complete", progress=progress)
 
             # Export to FBX (for Unreal Engine)
             if export_fbx:
-                self.log(f"\n--- FBX Export (Unreal Engine) ---")
+                current_export += 1
+                progress = 30 + (current_export * export_progress_per_format)
+                self.log(f"\n--- FBX Export (Unreal Engine) ---", progress=progress - export_progress_per_format + 5)
                 fbx_dir = output_path / f"{shot_name}_fbx"
                 exporter = FBXExporter(self.progress_callback)
                 results['fbx'] = exporter.export(scene_data, fbx_dir, shot_name)
+                self.log(f"FBX export complete", progress=progress)
 
             # Step 4: Summary
-            self.log(f"\n{'='*60}")
+            self.log(f"\n{'='*60}", progress=95)
             self.log(f"Export Complete!")
             self.log(f"{'='*60}")
 
