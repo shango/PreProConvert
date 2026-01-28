@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class JobManager:
     """Manages job state and progress queues"""
 
-    def __init__(self, cleanup_minutes: int = 10):
+    def __init__(self, cleanup_minutes: int = 15):
         self._jobs: Dict[str, Job] = {}
         self._progress_queues: Dict[str, Queue] = {}
         self._lock = Lock()
@@ -114,13 +114,19 @@ class JobManager:
         return False
 
     def cleanup_old_jobs(self) -> List[str]:
-        """Remove jobs older than cleanup_minutes, return list of removed job IDs"""
+        """Remove completed/failed jobs older than cleanup_minutes after completion.
+        Also removes jobs that were never completed but are older than 1 hour (stale)."""
         cutoff = datetime.now() - timedelta(minutes=self.cleanup_minutes)
+        stale_cutoff = datetime.now() - timedelta(hours=1)
         to_remove = []
 
         with self._lock:
             for job_id, job in list(self._jobs.items()):
-                if job.created_at < cutoff:
+                if job.completed_at and job.completed_at < cutoff:
+                    # Completed/failed: 15 min after completion
+                    to_remove.append(job_id)
+                elif not job.completed_at and job.created_at < stale_cutoff:
+                    # Never finished: clean up after 1 hour
                     to_remove.append(job_id)
 
             for job_id in to_remove:

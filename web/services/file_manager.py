@@ -105,18 +105,24 @@ class FileManager:
         logger.info(f"Created ZIP: {zip_path}")
         return str(zip_path)
 
-    def delete_job_files(self, job_id: str):
-        """Delete all files for a job"""
+    def delete_upload_files(self, job_id: str):
+        """Delete only uploaded source files for a job (keeps outputs)"""
         upload_dir = self.uploads_dir / job_id
-        output_dir = self.outputs_dir / job_id
-
         if upload_dir.exists():
             shutil.rmtree(upload_dir)
             logger.info(f"Deleted upload dir: {upload_dir}")
 
+    def delete_output_files(self, job_id: str):
+        """Delete only output/download files for a job"""
+        output_dir = self.outputs_dir / job_id
         if output_dir.exists():
             shutil.rmtree(output_dir)
             logger.info(f"Deleted output dir: {output_dir}")
+
+    def delete_job_files(self, job_id: str):
+        """Delete all files for a job"""
+        self.delete_upload_files(job_id)
+        self.delete_output_files(job_id)
 
     def cleanup_old_files(self, job_ids: list):
         """Delete files for multiple jobs"""

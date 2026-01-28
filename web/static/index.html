@@ -560,41 +560,63 @@
             if (file) uploadFile(file);
         });
 
-        // Upload file
-        async function uploadFile(file) {
+        // Upload file with progress
+        function uploadFile(file) {
             const formData = new FormData();
             formData.append('file', file);
 
-            try {
-                dropzone.innerHTML = '<h2>Uploading...</h2>';
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
 
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
+            // Show upload progress UI in dropzone
+            dropzone.innerHTML = `
+                <h2 style="color: var(--text-secondary);">Uploading... <span id="uploadPercent">0%</span></h2>
+                <p id="uploadDetail">0 / ${fileSizeMB} MB</p>
+                <div class="progress-bar" style="margin: 0.75rem 0 0 0;">
+                    <div id="uploadFill" class="progress-fill" style="width: 0%;"></div>
+                </div>
+            `;
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Upload failed');
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                    document.getElementById('uploadPercent').textContent = pct + '%';
+                    document.getElementById('uploadFill').style.width = pct + '%';
+                    document.getElementById('uploadDetail').textContent = `${loadedMB} / ${fileSizeMB} MB`;
                 }
+            });
 
-                const data = await response.json();
-                currentJobId = data.job_id;
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const data = JSON.parse(xhr.responseText);
+                    currentJobId = data.job_id;
 
-                // Store base filename (without extension) for output naming
-                uploadedBaseName = data.filename.replace(/\.[^/.]+$/, '');
+                    // Store base filename (without extension) for output naming
+                    uploadedBaseName = data.filename.replace(/\.[^/.]+$/, '');
 
-                // Update UI
-                fileName.textContent = data.filename;
-                fileMeta.textContent = `${data.format} | ${data.detected_frames || '?'} frames | ${data.detected_fps || 24} fps`;
+                    // Update UI
+                    fileName.textContent = data.filename;
+                    fileMeta.textContent = `${data.format} | ${data.detected_frames || '?'} frames | ${data.detected_fps || 24} fps`;
 
-                showSection('options');
+                    showSection('options');
+                    resetDropzone();
+                } else {
+                    let msg = 'Upload failed';
+                    try { msg = JSON.parse(xhr.responseText).detail || msg; } catch(e) {}
+                    alert('Upload failed: ' + msg);
+                    resetDropzone();
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                alert('Upload failed: network error');
                 resetDropzone();
+            });
 
-            } catch (error) {
-                alert('Upload failed: ' + error.message);
-                resetDropzone();
-            }
+            xhr.open('POST', '/api/upload');
+            xhr.send(formData);
         }
 
         // Start conversion

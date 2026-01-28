@@ -6,6 +6,11 @@ Detects animation types (transform vs vertex) to determine export strategy
 Works with any BaseReader implementation (Alembic, USD, etc.)
 """
 
+import logging
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
 
 class AnimationDetector:
     """Analyzes scene to detect different types of animation
@@ -32,7 +37,7 @@ class AnimationDetector:
         """Detect if a mesh has vertex animation (deformation)
 
         Samples vertex positions across multiple frames to detect changes.
-        Uses a sampling interval for efficiency on large frame ranges.
+        Uses numpy for fast vectorized comparison.
 
         Args:
             reader: BaseReader instance (AlembicReader or USDReader)
@@ -54,27 +59,22 @@ class AnimationDetector:
             if num_verts == 0:
                 return False
 
+            # Convert first frame to numpy array once
+            first_arr = np.array(first_positions, dtype=np.float64)
+
             # Sample every 5th frame for efficiency, or at least 5 frames
-            # For 120 frame animation: sample every 6 frames (120/20 = 6)
-            # For 30 frame animation: sample every 5 frames (min interval)
             sample_interval = max(5, frame_count // 20)
 
             # Check sampled frames for vertex position changes
             for frame in range(2, frame_count + 1, sample_interval):
-                # Frame 1 = start_time, Frame 2 = start_time + 1/fps, etc.
                 time_seconds = start_time + (frame - 1) / fps
                 mesh_data = reader.get_mesh_data_at_time(mesh_obj, time_seconds)
                 positions = mesh_data['positions']
 
-                # Compare each vertex position to first frame
-                for i in range(num_verts):
-                    dx = abs(positions[i][0] - first_positions[i][0])
-                    dy = abs(positions[i][1] - first_positions[i][1])
-                    dz = abs(positions[i][2] - first_positions[i][2])
-
-                    # If any vertex moved beyond tolerance, vertex animation detected
-                    if dx > self.tolerance or dy > self.tolerance or dz > self.tolerance:
-                        return True
+                # Vectorized comparison with numpy
+                current_arr = np.array(positions, dtype=np.float64)
+                if np.any(np.abs(current_arr - first_arr) > self.tolerance):
+                    return True
 
             return False
 
@@ -144,14 +144,18 @@ class AnimationDetector:
         }
 
         parent_map = reader.get_parent_map()
+        meshes = list(reader.get_meshes())
+        total = len(meshes)
 
-        for mesh_obj in reader.get_meshes():
+        for idx, mesh_obj in enumerate(meshes, 1):
             mesh_name = mesh_obj.getName()
+            logger.info(f"  Analyzing mesh {idx}/{total}: {mesh_name}")
 
             # Check for vertex animation first (most important for AE)
             has_vertex_anim = self.detect_vertex_animation(reader, mesh_obj, frame_count, fps, start_time)
 
             if has_vertex_anim:
+                logger.info(f"    -> vertex animated")
                 result['vertex_animated'].append(mesh_name)
                 continue
 
@@ -163,8 +167,10 @@ class AnimationDetector:
                 has_transform_anim = self.detect_transform_animation(reader, parent, frame_count, fps, start_time)
 
             if has_transform_anim:
+                logger.info(f"    -> transform only")
                 result['transform_only'].append(mesh_name)
             else:
+                logger.info(f"    -> static")
                 result['static'].append(mesh_name)
 
         return result

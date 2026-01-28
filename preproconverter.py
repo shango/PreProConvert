@@ -8,6 +8,7 @@ v2.6.2 - SceneData architecture: readers extract all data into format-agnostic
 structure, exporters work only with SceneData (no direct reader access).
 """
 
+import os
 from pathlib import Path
 
 # Import readers module
@@ -58,6 +59,38 @@ class PreProConverter:
         if self.progress_callback:
             self.progress_callback(message, progress)
         print(message)
+
+    def _get_memory_mb(self):
+        """Get current process memory usage in MB using /proc (Linux) or fallback"""
+        try:
+            with open('/proc/self/status', 'r') as f:
+                for line in f:
+                    if line.startswith('VmRSS:'):
+                        return int(line.split()[1]) // 1024  # KB to MB
+        except (FileNotFoundError, ValueError):
+            pass
+        return None
+
+    def _get_system_memory_mb(self):
+        """Get total system memory in MB"""
+        try:
+            with open('/proc/meminfo', 'r') as f:
+                for line in f:
+                    if line.startswith('MemTotal:'):
+                        return int(line.split()[1]) // 1024  # KB to MB
+        except (FileNotFoundError, ValueError):
+            pass
+        return None
+
+    def log_resources(self, label):
+        """Log current memory usage with a label"""
+        mem = self._get_memory_mb()
+        total = self._get_system_memory_mb()
+        if mem is not None and total is not None:
+            pct = round(mem / total * 100)
+            self.log(f"  [Resources] {label}: {mem}MB / {total}MB ({pct}%)")
+        elif mem is not None:
+            self.log(f"  [Resources] {label}: {mem}MB")
 
     def convert_multi_format(self, input_file, output_dir, shot_name, fps=24, frame_count=None,
                             export_ae=True, export_usd=True, export_maya_ma=True, export_fbx=True):
@@ -114,6 +147,7 @@ class PreProConverter:
 
             # Step 1: Read input file ONCE (auto-detect format)
             self.log(f"Step 1/4: Reading {format_name} file...", progress=5)
+            self.log_resources("Before read")
             reader = create_reader(input_file)
 
             # Auto-detect frame count if not provided
@@ -127,7 +161,9 @@ class PreProConverter:
 
             # Step 2: Extract all scene data ONCE (includes animation analysis)
             self.log("\nStep 2/4: Extracting scene data and analyzing animation...", progress=15)
+            self.log_resources("Before extraction")
             scene_data = reader.extract_scene_data(fps, frame_count)
+            self.log_resources("After extraction")
 
             # Log animation summary
             categories = scene_data.animation_categories
@@ -145,6 +181,7 @@ class PreProConverter:
 
             # Step 3: Export to selected formats
             self.log("\nStep 3/4: Exporting to selected formats...", progress=30)
+            self.log_resources("Before exports")
 
             current_export = 0
 
@@ -157,6 +194,7 @@ class PreProConverter:
                 exporter = AfterEffectsExporter(self.progress_callback)
                 results['ae'] = exporter.export(scene_data, ae_dir, shot_name)
                 self.log(f"After Effects export complete", progress=progress)
+                self.log_resources("After AE export")
 
             # Export to USD
             if export_usd:
@@ -167,6 +205,7 @@ class PreProConverter:
                 exporter = USDExporter(self.progress_callback)
                 results['usd'] = exporter.export(scene_data, usd_dir, shot_name)
                 self.log(f"USD export complete", progress=progress)
+                self.log_resources("After USD export")
 
             # Export to Maya MA
             if export_maya_ma:
@@ -177,6 +216,7 @@ class PreProConverter:
                 exporter = MayaMAExporter(self.progress_callback)
                 results['maya_ma'] = exporter.export(scene_data, maya_dir, shot_name)
                 self.log(f"Maya MA export complete", progress=progress)
+                self.log_resources("After Maya export")
 
             # Export to FBX (for Unreal Engine)
             if export_fbx:
@@ -187,6 +227,7 @@ class PreProConverter:
                 exporter = FBXExporter(self.progress_callback)
                 results['fbx'] = exporter.export(scene_data, fbx_dir, shot_name)
                 self.log(f"FBX export complete", progress=progress)
+                self.log_resources("After FBX export")
 
             # Step 4: Summary
             self.log(f"\n{'='*60}", progress=95)

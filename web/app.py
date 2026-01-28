@@ -27,8 +27,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Max upload size (500MB)
-MAX_UPLOAD_SIZE = 500 * 1024 * 1024
+# Max upload size (20GB)
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024 * 1024
 
 
 async def cleanup_task():
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 
     # Start background cleanup task
     cleanup = asyncio.create_task(cleanup_task())
-    logger.info("Started background cleanup task (removes files older than 10 minutes)")
+    logger.info("Started background cleanup task (downloads expire 15 min after conversion)")
 
     yield
 

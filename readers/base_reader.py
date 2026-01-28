@@ -358,6 +358,9 @@ class BaseReader(ABC):
             # Extract vertex positions per frame if vertex-animated (raw, not blend shape)
             vertex_positions = None
             if anim_type == AnimationType.VERTEX_ANIMATED:
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.info(f"Extracting vertex data for {mesh_name}: {frame_count} frames")
                 vertex_positions = {}
                 for frame in range(1, frame_count + 1):
                     # Use start_time offset: Frame 1 = start_time, Frame 2 = start_time + 1/fps
@@ -366,6 +369,17 @@ class BaseReader(ABC):
                     vertex_positions[frame] = [
                         (p[0], p[1], p[2]) for p in frame_mesh_data['positions']
                     ]
+                    # Log memory every 25 frames
+                    if frame % 25 == 0 or frame == frame_count:
+                        try:
+                            with open('/proc/self/status', 'r') as _f:
+                                for _line in _f:
+                                    if _line.startswith('VmRSS:'):
+                                        _mem_mb = int(_line.split()[1]) // 1024
+                                        _logger.info(f"  Vertex extraction {mesh_name}: frame {frame}/{frame_count} - Memory: {_mem_mb}MB")
+                                        break
+                        except (FileNotFoundError, ValueError):
+                            pass
 
             meshes.append(MeshData(
                 name=mesh_name,

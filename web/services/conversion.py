@@ -55,6 +55,10 @@ class ConversionService:
                 progress_callback
             )
 
+            # Delete uploaded source file immediately (no longer needed)
+            file_manager.delete_upload_files(job_id)
+            logger.info(f"Deleted upload for job {job_id} (conversion finished)")
+
             if results.get('success', False):
                 # Create ZIP of results
                 zip_path = file_manager.create_results_zip(job_id, options.shot_name)
@@ -74,6 +78,8 @@ class ConversionService:
 
         except Exception as e:
             logger.exception(f"Conversion failed for job {job_id}")
+            # Delete uploaded source file on failure too
+            file_manager.delete_upload_files(job_id)
             job_manager.update_status(job_id, JobStatus.FAILED, error=str(e))
             job_manager.add_progress(job_id, f"Error: {str(e)}")
             job_manager.signal_complete(job_id)
