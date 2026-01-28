@@ -415,7 +415,7 @@
         </div>
 
         <!-- Conversion Status -->
-        <div class="status-table">
+        <div id="statusTable" class="status-table">
             <div class="status-table-header">
                 <h4>Conversion Pipeline Status</h4>
                 <div class="status-legend">
@@ -513,6 +513,7 @@
         // Elements
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
+        const statusTable = document.getElementById('statusTable');
         const optionsSection = document.getElementById('optionsSection');
         const progressSection = document.getElementById('progressSection');
         const resultsSection = document.getElementById('resultsSection');
@@ -727,6 +728,7 @@
         // Helpers
         function showSection(section) {
             dropzone.classList.toggle('hidden', section !== 'dropzone');
+            statusTable.classList.toggle('hidden', section !== 'dropzone');
             optionsSection.classList.toggle('hidden', section !== 'options');
             progressSection.classList.toggle('hidden', section !== 'progress');
             resultsSection.classList.toggle('hidden', section !== 'results');
@@ -736,6 +738,7 @@
         // Show section while keeping progress log visible
         function showSectionWithLog(section) {
             dropzone.classList.add('hidden');
+            statusTable.classList.add('hidden');
             optionsSection.classList.add('hidden');
             progressSection.classList.remove('hidden');  // Keep log visible
             resultsSection.classList.toggle('hidden', section !== 'results');
