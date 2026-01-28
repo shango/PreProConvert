@@ -959,6 +959,14 @@ class MayaReader(BaseReader):
         """
         return obj.getFullName()
 
+    def _uses_shape_transform_pattern(self):
+        """Maya uses shape/transform pairs like Alembic.
+
+        Camera and mesh nodes are shape nodes under transform nodes.
+        The transform name is the meaningful display name.
+        """
+        return True
+
     def _is_organizational_group(self, obj: MayaNode) -> bool:
         """Check if transform is just an organizational container
 

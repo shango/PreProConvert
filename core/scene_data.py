@@ -516,15 +516,21 @@ class HierarchyTree:
         """
         return self.intermediate_groups
 
-    def get_node_parent_from_path(self, full_path: str) -> Optional[str]:
+    def get_node_parent_from_path(self, full_path: str, display_name: str = None) -> Optional[str]:
         """Get parent node name from a full_path
 
-        Handles the Alembic convention where shapes have transform parents.
-        For "/Group/Transform/Shape", returns "Group" (grandparent).
-        For "/Group/Transform", returns "Group" (parent).
+        Detects shape nodes by comparing the last path component to the
+        display_name. If they differ, the last component is a shape node
+        and the parent is the grandparent (skipping the shape's transform).
+
+        Examples:
+            "/Group/Camera/CameraShape" display="Camera" -> "Group" (grandparent)
+            "/Group/Camera/object" display="Camera" -> "Group" (grandparent)
+            "/Group/Transform" display="Transform" -> "Group" (parent)
 
         Args:
             full_path: Full hierarchy path
+            display_name: Display name of this node (parent_name or name)
 
         Returns:
             Sanitized parent name, or None if root-level
@@ -534,7 +540,15 @@ class HierarchyTree:
             return None
 
         obj_name = parts[-1]
-        if obj_name.endswith('Shape') and len(parts) >= 3:
+
+        # Determine if the last path component is a shape node:
+        # If the display_name differs from the last path component, the object
+        # is a shape node and we need the grandparent (parent of the transform)
+        is_shape = False
+        if display_name and len(parts) >= 3:
+            is_shape = _sanitize_name(obj_name) != _sanitize_name(display_name)
+
+        if is_shape:
             return _sanitize_name(parts[-3])
         elif len(parts) >= 2:
             return _sanitize_name(parts[-2])
@@ -629,12 +643,15 @@ class HierarchyTree:
 
         # Build parent-child relationships
         for name, node in tree.nodes_by_name.items():
-            parent_name = tree.get_node_parent_from_path(node.full_path)
+            parent_name = tree.get_node_parent_from_path(
+                node.full_path, display_name=node.original_name
+            )
             if parent_name and parent_name in tree.nodes_by_name:
                 parent_node = tree.nodes_by_name[parent_name]
-                node.parent = parent_node
-                if node not in parent_node.children:
-                    parent_node.children.append(node)
+                if parent_node is not node:  # Prevent self-referencing
+                    node.parent = parent_node
+                    if node not in parent_node.children:
+                        parent_node.children.append(node)
 
         # Sort groups by depth (parents first)
         sorted_groups = sorted(hierarchy_groups.items(), key=lambda x: group_depths.get(x[0], 0))

@@ -145,12 +145,19 @@ class USDExporter(BaseExporter):
                 usd_path = self._get_usd_path_from_full_path(mesh.full_path, mesh_name)
                 self._ensure_hierarchy_exists(stage, usd_path)
 
+                # Log geometry info for debugging
+                geom = mesh.geometry
+                verts = len(geom.positions) if geom and geom.positions else 0
+                faces = len(geom.counts) if geom and geom.counts else 0
+                if verts == 0:
+                    self.log(f"WARNING: Mesh {mesh_name} has 0 vertices - will be invisible")
+
                 if mesh.animation_type == AnimationType.VERTEX_ANIMATED:
-                    self.log(f"Exporting mesh with vertex animation: {mesh_name} -> {usd_path}")
+                    self.log(f"Exporting mesh with vertex animation: {mesh_name} ({verts} verts, {faces} faces) -> {usd_path}")
                     self._export_mesh_with_vertex_anim(stage, mesh, usd_path, frame_count)
                     vertex_animated_count += 1
                 else:
-                    self.log(f"Exporting mesh (transform only): {mesh_name} -> {usd_path}")
+                    self.log(f"Exporting mesh (transform only): {mesh_name} ({verts} verts, {faces} faces) -> {usd_path}")
                     self._export_mesh_transform_only(stage, mesh, usd_path, frame_count)
 
                 self.created_prims.add(usd_path)
@@ -473,8 +480,10 @@ class USDExporter(BaseExporter):
         # Determine hierarchy path
         # For shapes: /Group/Transform/Shape -> /World/Group/Transform
         # For transforms: /Group/Transform -> /World/Group/Transform
+        # Detect shape nodes by comparing last path component to display_name
         obj_name = parts[-1]
-        if obj_name.endswith('Shape') and len(parts) >= 2:
+        is_shape = (self._sanitize_name(obj_name) != sanitized_name) and len(parts) >= 2
+        if is_shape:
             # Shape node - use parent path elements (excluding shape itself)
             hierarchy_parts = parts[:-1]  # Everything except the shape
         else:

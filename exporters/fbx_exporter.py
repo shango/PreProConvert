@@ -160,9 +160,9 @@ class FBXExporter(BaseExporter):
                 cam_name = self._sanitize_name(display_name)
                 # Use centralized hierarchy or fall back to local method
                 if scene_data.hierarchy:
-                    parent = scene_data.hierarchy.get_node_parent_from_path(cam.full_path)
+                    parent = scene_data.hierarchy.get_node_parent_from_path(cam.full_path, display_name)
                 else:
-                    parent = self._get_node_parent(cam.full_path, None)
+                    parent = self._get_node_parent(cam.full_path, None, display_name)
                 self.log(f"  Processing camera: {cam_name}" + (f" (parent: {parent})" if parent else ""))
                 lines.extend(self._write_camera(cam, cam_name, parent))
 
@@ -179,9 +179,9 @@ class FBXExporter(BaseExporter):
 
                 # Use centralized hierarchy or fall back to local method
                 if scene_data.hierarchy:
-                    parent = scene_data.hierarchy.get_node_parent_from_path(mesh.full_path)
+                    parent = scene_data.hierarchy.get_node_parent_from_path(mesh.full_path, display_name)
                 else:
-                    parent = self._get_node_parent(mesh.full_path, None)
+                    parent = self._get_node_parent(mesh.full_path, None, display_name)
 
                 if mesh.animation_type == AnimationType.BLEND_SHAPE:
                     self.log(f"  Processing mesh with blend shapes: {mesh_name}" + (f" (parent: {parent})" if parent else ""))
@@ -197,9 +197,9 @@ class FBXExporter(BaseExporter):
                     continue
                 # Use centralized hierarchy or fall back to local method
                 if scene_data.hierarchy:
-                    parent = scene_data.hierarchy.get_node_parent_from_path(transform.full_path)
+                    parent = scene_data.hierarchy.get_node_parent_from_path(transform.full_path, xform_name)
                 else:
-                    parent = self._get_node_parent(transform.full_path, None)
+                    parent = self._get_node_parent(transform.full_path, None, xform_name)
                 self.log(f"  Processing locator: {xform_name}" + (f" (parent: {parent})" if parent else ""))
                 lines.extend(self._write_locator(transform, xform_name, parent))
 
@@ -1276,14 +1276,24 @@ class FBXExporter(BaseExporter):
         sorted_groups = sorted(hierarchy_groups.items(), key=lambda x: group_depths.get(x[0], 0))
         return sorted_groups
 
-    def _get_node_parent(self, full_path, hierarchy_map):
-        """Get the parent node name for an object from its full_path"""
+    def _get_node_parent(self, full_path, hierarchy_map, display_name=None):
+        """Get the parent node name for an object from its full_path
+
+        Detects shape nodes by comparing the last path component to the
+        display_name. If they differ, the object is a shape node.
+        """
         parts = [p for p in full_path.split('/') if p]
         if len(parts) < 2:
             return None
 
         obj_name = parts[-1]
-        if obj_name.endswith('Shape') and len(parts) >= 3:
+
+        # If display_name differs from last path component, it's a shape node
+        is_shape = False
+        if display_name and len(parts) >= 3:
+            is_shape = self._sanitize_name(obj_name) != self._sanitize_name(display_name)
+
+        if is_shape:
             return self._sanitize_name(parts[-3])
         elif len(parts) >= 2:
             return self._sanitize_name(parts[-2])

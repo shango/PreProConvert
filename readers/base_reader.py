@@ -201,6 +201,20 @@ class BaseReader(ABC):
         """
         pass
 
+    def _uses_shape_transform_pattern(self) -> bool:
+        """Whether this format uses separate shape/transform nodes.
+
+        In Alembic and Maya, cameras and meshes are 'shape' nodes that live
+        under parent transform nodes. The transform's name is the meaningful
+        display name (e.g., Camera1 > CameraShape, or Camera1 > object).
+
+        In USD, prims are self-contained — no shape/transform split.
+
+        Returns:
+            bool: True if cameras/meshes should use parent name for display
+        """
+        return False
+
     def _is_organizational_group(self, obj: Any) -> bool:
         """Check if transform is just an organizational container
 
@@ -228,6 +242,9 @@ class BaseReader(ABC):
         Returns:
             SceneData: Complete scene data with all animation
         """
+        import logging
+        _logger = logging.getLogger(__name__)
+
         from core.scene_data import (
             SceneData, SceneMetadata, CameraData, MeshData, TransformData,
             Keyframe, CameraProperties, MeshGeometry, AnimationType, AnimationCategories,
@@ -271,16 +288,22 @@ class BaseReader(ABC):
 
         # Step 4: Extract cameras with animation
         cameras = []
-        for cam_obj in self.get_cameras():
+        cam_objects = self.get_cameras()
+        _logger.info(f"Found {len(cam_objects)} cameras")
+        for cam_obj in cam_objects:
             cam_name = cam_obj.getName()
             parent = parent_map.get(cam_name)
 
             # Determine parent_name for display purposes
-            # Only use parent_name if the camera follows Alembic convention (name ends with "Shape")
-            if cam_name.endswith('Shape') and parent:
+            # Alembic/Maya: cameras are shape nodes under transforms — use parent name
+            # USD: camera prim IS the named object — no parent name needed
+            if self._uses_shape_transform_pattern() and parent:
                 parent_name = parent.getName()
             else:
                 parent_name = None
+
+            display_name = parent_name if parent_name else cam_name
+            _logger.info(f"  Camera: {cam_name} -> display: {display_name} (path: {self._get_full_path(cam_obj)})")
 
             # Always use the camera object itself for transform extraction
             # This ensures we get the correct world transform regardless of hierarchy
@@ -307,17 +330,19 @@ class BaseReader(ABC):
 
         # Step 5: Extract meshes with animation
         meshes = []
+        mesh_objects = list(self.get_meshes())
         vertex_animated_set = set(animation_analysis['vertex_animated'])
         transform_only_set = set(animation_analysis['transform_only'])
+        _logger.info(f"Found {len(mesh_objects)} meshes (vertex_anim: {len(vertex_animated_set)}, transform: {len(transform_only_set)}, static: {len(mesh_objects) - len(vertex_animated_set) - len(transform_only_set)})")
 
-        for mesh_obj in self.get_meshes():
+        for mesh_obj in mesh_objects:
             mesh_name = mesh_obj.getName()
             parent = parent_map.get(mesh_name)
 
             # Determine parent_name for display purposes
-            # Only use parent_name if the mesh follows Alembic convention (name ends with "Shape")
-            # For USD meshes, the mesh name itself is the proper display name
-            if mesh_name.endswith('Shape') and parent:
+            # Alembic/Maya: meshes are shape nodes under transforms — use parent name
+            # USD: mesh prim IS the named object — no parent name needed
+            if self._uses_shape_transform_pattern() and parent:
                 parent_name = parent.getName()
             else:
                 parent_name = None
@@ -342,6 +367,9 @@ class BaseReader(ABC):
             else:
                 anim_type = AnimationType.STATIC
 
+            display_name = parent_name if parent_name else mesh_name
+            _logger.info(f"  Mesh: {mesh_name} -> display: {display_name}, type: {anim_type.value} (path: {self._get_full_path(mesh_obj)})")
+
             # Get first frame geometry
             # Both Alembic and USD store mesh vertices in local (object) space
             # SceneData always stores vertices in local space (normalized)
@@ -351,6 +379,7 @@ class BaseReader(ABC):
                 indices=list(mesh_data['indices']),
                 counts=list(mesh_data['counts'])
             )
+            _logger.info(f"    Geometry: {len(geometry.positions)} verts, {len(geometry.counts)} faces")
 
             # Extract transform keyframes
             keyframes = self._extract_keyframes(transform_obj, fps, frame_count, start_time)
@@ -358,8 +387,6 @@ class BaseReader(ABC):
             # Extract vertex positions per frame if vertex-animated (raw, not blend shape)
             vertex_positions = None
             if anim_type == AnimationType.VERTEX_ANIMATED:
-                import logging
-                _logger = logging.getLogger(__name__)
                 _logger.info(f"Extracting vertex data for {mesh_name}: {frame_count} frames")
                 vertex_positions = {}
                 for frame in range(1, frame_count + 1):

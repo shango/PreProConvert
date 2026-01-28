@@ -278,9 +278,9 @@ class MayaMAExporter(BaseExporter):
 
             # Use centralized hierarchy or fall back to local method
             if scene_data.hierarchy:
-                parent = scene_data.hierarchy.get_node_parent_from_path(cam.full_path)
+                parent = scene_data.hierarchy.get_node_parent_from_path(cam.full_path, display_name)
             else:
-                parent = self._get_node_parent(cam.full_path, None)
+                parent = self._get_node_parent(cam.full_path, None, display_name)
 
             self.log(f"  Processing camera: {cam_name}" + (f" (parent: {parent})" if parent else ""))
             lines.extend(self._export_camera(cam, cam_name, parent))
@@ -295,17 +295,24 @@ class MayaMAExporter(BaseExporter):
 
             # Use centralized hierarchy or fall back to local method
             if scene_data.hierarchy:
-                parent = scene_data.hierarchy.get_node_parent_from_path(mesh.full_path)
+                parent = scene_data.hierarchy.get_node_parent_from_path(mesh.full_path, display_name)
             else:
-                parent = self._get_node_parent(mesh.full_path, None)
+                parent = self._get_node_parent(mesh.full_path, None, display_name)
+
+            # Log geometry info for debugging
+            geom = mesh.geometry
+            verts = len(geom.positions) if geom and geom.positions else 0
+            faces = len(geom.counts) if geom and geom.counts else 0
+            if verts == 0:
+                self.log(f"  WARNING: Mesh {mesh_name} has 0 vertices - will be invisible")
 
             if mesh.animation_type == AnimationType.VERTEX_ANIMATED:
-                self.log(f"  Processing vertex-animated mesh: {mesh_name}" + (f" (parent: {parent})" if parent else ""))
+                self.log(f"  Processing vertex-animated mesh: {mesh_name} ({verts} verts, {faces} faces)" + (f" (parent: {parent})" if parent else ""))
                 lines.extend(self._export_vertex_animated_mesh(
                     mesh, mesh_name, source_file_path, source_file_type, parent
                 ))
             else:
-                self.log(f"  Processing mesh: {mesh_name}" + (f" (parent: {parent})" if parent else ""))
+                self.log(f"  Processing mesh: {mesh_name} ({verts} verts, {faces} faces)" + (f" (parent: {parent})" if parent else ""))
                 is_animated = mesh.animation_type == AnimationType.TRANSFORM_ONLY
                 lines.extend(self._export_static_mesh(mesh, mesh_name, is_animated, parent))
             self.created_nodes.add(mesh_name)
@@ -321,9 +328,9 @@ class MayaMAExporter(BaseExporter):
 
             # Use centralized hierarchy or fall back to local method
             if scene_data.hierarchy:
-                parent = scene_data.hierarchy.get_node_parent_from_path(transform.full_path)
+                parent = scene_data.hierarchy.get_node_parent_from_path(transform.full_path, xform_name)
             else:
-                parent = self._get_node_parent(transform.full_path, None)
+                parent = self._get_node_parent(transform.full_path, None, xform_name)
 
             self.log(f"  Processing locator: {xform_name}" + (f" (parent: {parent})" if parent else ""))
             lines.extend(self._export_locator(transform, xform_name, parent))
@@ -754,12 +761,17 @@ class MayaMAExporter(BaseExporter):
 
         return sorted_groups
 
-    def _get_node_parent(self, full_path, hierarchy_map):
+    def _get_node_parent(self, full_path, hierarchy_map, display_name=None):
         """Get the immediate parent node name for a given object
+
+        Detects shape nodes by comparing the last path component to the
+        display_name. If they differ, the object is a shape node and the
+        parent is the grandparent (skipping the shape's transform).
 
         Args:
             full_path: Full hierarchy path (e.g., "/Group/SubGroup/Object")
             hierarchy_map: Hierarchy map from _build_hierarchy_map
+            display_name: Display name of this node (parent_name or name)
 
         Returns:
             str or None: Parent node name (sanitized), or None if at root
@@ -768,19 +780,16 @@ class MayaMAExporter(BaseExporter):
         if len(parts) < 2:
             return None
 
-        # Get the parent from the path (second to last element)
-        # But we need to return the TRANSFORM parent, not the shape parent
-        # For "/Group/Camera/CameraShape", Camera's parent is Group
-        # For "/Group/Mesh/MeshShape", Mesh's parent is Group
-
-        # The object we're creating uses display_name (parent_name or name)
-        # So if this is a shape, we want the grandparent
         obj_name = parts[-1]
-        if obj_name.endswith('Shape') and len(parts) >= 3:
-            # Shape node - parent is the transform, grandparent is the hierarchy parent
-            return self._sanitize_name(parts[-3]) if len(parts) >= 3 else None
+
+        # If display_name differs from last path component, it's a shape node
+        is_shape = False
+        if display_name and len(parts) >= 3:
+            is_shape = self._sanitize_name(obj_name) != self._sanitize_name(display_name)
+
+        if is_shape:
+            return self._sanitize_name(parts[-3])
         elif len(parts) >= 2:
-            # Transform node - parent is the previous path element
             return self._sanitize_name(parts[-2])
 
         return None

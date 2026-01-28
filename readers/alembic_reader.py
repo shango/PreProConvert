@@ -571,6 +571,14 @@ class AlembicReader(BaseReader):
         """
         return obj.getFullName()
 
+    def _uses_shape_transform_pattern(self):
+        """Alembic always uses shape/transform pairs.
+
+        ICamera and IPolyMesh are shape nodes under IXform transforms.
+        The transform name is the meaningful display name.
+        """
+        return True
+
     def _is_organizational_group(self, obj):
         """Check if transform is just an organizational container
 
