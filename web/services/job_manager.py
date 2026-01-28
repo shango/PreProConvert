@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 class JobManager:
     """Manages job state and progress queues"""
 
-    def __init__(self, cleanup_hours: int = 3):
+    def __init__(self, cleanup_minutes: int = 10):
         self._jobs: Dict[str, Job] = {}
         self._progress_queues: Dict[str, Queue] = {}
         self._lock = Lock()
-        self.cleanup_hours = cleanup_hours
+        self.cleanup_minutes = cleanup_minutes
 
     def create_job(self, filename: str, format: str, input_path: str, output_dir: str) -> Job:
         """Create a new job"""
@@ -114,8 +114,8 @@ class JobManager:
         return False
 
     def cleanup_old_jobs(self) -> List[str]:
-        """Remove jobs older than cleanup_hours, return list of removed job IDs"""
-        cutoff = datetime.now() - timedelta(hours=self.cleanup_hours)
+        """Remove jobs older than cleanup_minutes, return list of removed job IDs"""
+        cutoff = datetime.now() - timedelta(minutes=self.cleanup_minutes)
         to_remove = []
 
         with self._lock:

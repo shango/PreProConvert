@@ -32,14 +32,14 @@ MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 
 
 async def cleanup_task():
-    """Background task to clean up old jobs and files every hour"""
+    """Background task to clean up old jobs and files every 2 minutes"""
     while True:
-        await asyncio.sleep(3600)  # Run every hour
+        await asyncio.sleep(120)  # Check every 2 minutes
         try:
             old_job_ids = job_manager.cleanup_old_jobs()
             if old_job_ids:
                 file_manager.cleanup_old_files(old_job_ids)
-                logger.info(f"Cleanup removed {len(old_job_ids)} jobs older than {job_manager.cleanup_hours} hours")
+                logger.info(f"Cleanup removed {len(old_job_ids)} jobs older than {job_manager.cleanup_minutes} minutes")
         except Exception as e:
             logger.error(f"Cleanup task error: {e}")
 
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 
     # Start background cleanup task
     cleanup = asyncio.create_task(cleanup_task())
-    logger.info("Started background cleanup task (removes files older than 3 hours)")
+    logger.info("Started background cleanup task (removes files older than 10 minutes)")
 
     yield
 
