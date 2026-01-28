@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class JobManager:
     """Manages job state and progress queues"""
 
-    def __init__(self, cleanup_hours: int = 24):
+    def __init__(self, cleanup_hours: int = 3):
         self._jobs: Dict[str, Job] = {}
         self._progress_queues: Dict[str, Queue] = {}
         self._lock = Lock()

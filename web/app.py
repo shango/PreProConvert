@@ -31,6 +31,19 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024
 
 
+async def cleanup_task():
+    """Background task to clean up old jobs and files every hour"""
+    while True:
+        await asyncio.sleep(3600)  # Run every hour
+        try:
+            old_job_ids = job_manager.cleanup_old_jobs()
+            if old_job_ids:
+                file_manager.cleanup_old_files(old_job_ids)
+                logger.info(f"Cleanup removed {len(old_job_ids)} jobs older than {job_manager.cleanup_hours} hours")
+        except Exception as e:
+            logger.error(f"Cleanup task error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
@@ -46,7 +59,15 @@ async def lifespan(app: FastAPI):
         logger.info(f"imath loaded: {imath.__file__}")
     except ImportError as e:
         logger.error(f"imath not available: {e}")
+
+    # Start background cleanup task
+    cleanup = asyncio.create_task(cleanup_task())
+    logger.info("Started background cleanup task (removes files older than 3 hours)")
+
     yield
+
+    # Cancel cleanup task on shutdown
+    cleanup.cancel()
     logger.info("PreProConvert shutting down...")
 
 
