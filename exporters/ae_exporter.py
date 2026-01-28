@@ -58,6 +58,7 @@ class AfterEffectsExporter(BaseExporter):
             # Extract info from SceneData
             fps = scene_data.metadata.fps
             frame_count = scene_data.metadata.frame_count
+            start_frame = scene_data.metadata.start_frame
             comp_width = scene_data.metadata.width
             comp_height = scene_data.metadata.height
             footage_path = scene_data.metadata.footage_path
@@ -91,7 +92,7 @@ class AfterEffectsExporter(BaseExporter):
 
             # Create composition
             jsx_lines.append(f"var comp = app.project.items.addComp('{shot_name}', {comp_width}, {comp_height}, 1.0, {duration}, {fps});")
-            jsx_lines.append("comp.displayStartFrame = 1;")
+            jsx_lines.append(f"comp.displayStartFrame = {start_frame};")
             jsx_lines.append("")
 
             # Import footage if available
@@ -139,7 +140,7 @@ class AfterEffectsExporter(BaseExporter):
             obj_files = list(output_dir.glob('*.obj'))
 
             self.log(f"\n✓ JSX written to: {jsx_file}")
-            self.log(f"✓ Frame count: {frame_count}")
+            self.log(f"✓ Frame range: {start_frame} - {start_frame + frame_count - 1} ({frame_count} frames)")
             self.log(f"✓ Duration: {duration}s @ {fps} fps")
             self.log(f"✓ OBJ files exported: {len(obj_files)}")
 
@@ -308,6 +309,17 @@ class AfterEffectsExporter(BaseExporter):
 
         layer_var = f"camera_{self._sanitize_var_name(name)}"
         layer_name = self._escape_layer_name(name)
+
+        # Log animation info for debugging
+        if camera.keyframes:
+            first_kf = camera.keyframes[0]
+            last_kf = camera.keyframes[-1] if len(camera.keyframes) > 1 else first_kf
+            self.log(f"  Camera {name} frame 1: pos={first_kf.position}, rot={first_kf.rotation_ae}")
+            if len(camera.keyframes) > 1:
+                self.log(f"  Camera {name} frame {last_kf.frame}: pos={last_kf.position}, rot={last_kf.rotation_ae}")
+                pos_changed = first_kf.position != last_kf.position
+                rot_changed = first_kf.rotation_ae != last_kf.rotation_ae
+                self.log(f"    Position animated: {pos_changed}, Rotation animated: {rot_changed}")
 
         # Create camera
         jsx.append(f"var {layer_var} = comp.layers.addCamera('{layer_name}', [0, 0]);")

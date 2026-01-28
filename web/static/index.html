@@ -298,11 +298,113 @@
             border-radius: 8px;
             margin-top: 1rem;
         }
+
+        /* Conversion Status Table */
+        .status-table {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 1.5rem;
+        }
+
+        .status-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .status-table h4 {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+            margin-bottom: 0.75rem;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .status-source {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .status-targets {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-chip.working {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .status-chip.testing {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .status-chip.buggy {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-chip::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-legend {
+            display: flex;
+            gap: 0.75rem;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+
+        .status-legend span {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .status-legend span::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .status-legend .working::before { background: var(--success); }
+        .status-legend .testing::before { background: #fbbf24; }
+        .status-legend .buggy::before { background: #f87171; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>PreProConvert</h1>
+        <h1>PreProConvert <span style="font-size: 0.5em; color: var(--text-secondary);">v2.6.2</span></h1>
         <p class="subtitle">Convert Alembic, USD, and Maya files</p>
 
         <!-- Dropzone -->
@@ -310,6 +412,33 @@
             <h2>Drag & Drop Scene File</h2>
             <p>.abc, .usd, .usda, .usdc, .ma</p>
             <input type="file" id="fileInput" accept=".abc,.usd,.usda,.usdc,.ma">
+        </div>
+
+        <!-- Conversion Status -->
+        <div class="status-table">
+            <div class="status-table-header">
+                <h4>Conversion Pipeline Status</h4>
+                <div class="status-legend">
+                    <span class="working">Working</span>
+                    <span class="testing">Testing</span>
+                    <span class="buggy">Buggy</span>
+                </div>
+            </div>
+            <div class="status-grid">
+                <span class="status-source">Alembic</span>
+                <div class="status-targets">
+                    <span class="status-chip working">JSX</span>
+                    <span class="status-chip testing">Ma</span>
+                    <span class="status-chip testing">USD</span>
+                    <span class="status-chip testing">FBX</span>
+                </div>
+                <span class="status-source">USD</span>
+                <div class="status-targets">
+                    <span class="status-chip buggy">JSX</span>
+                    <span class="status-chip buggy">Ma</span>
+                    <span class="status-chip buggy">FBX</span>
+                </div>
+            </div>
         </div>
 
         <!-- Options Section -->

@@ -142,6 +142,40 @@ class AlembicReader(BaseReader):
         except Exception:
             return 120
 
+    def get_time_range(self):
+        """Get the time range of animation in the Alembic file
+
+        Returns:
+            tuple: (start_time, end_time, num_samples, time_per_sample) or None if not available
+                - start_time: Time in seconds of first sample
+                - end_time: Time in seconds of last sample
+                - num_samples: Total number of time samples
+                - time_per_sample: Time between samples (1/fps)
+        """
+        try:
+            num_time_samplings = self.archive.getNumTimeSamplings()
+            if num_time_samplings > 1:
+                # Use the first non-uniform time sampling (index 1)
+                time_sampling = self.archive.getTimeSampling(1)
+                num_samples = self.archive.getMaxNumSamplesForTimeSamplingIndex(1)
+
+                if num_samples > 0:
+                    # Get the actual sample times
+                    start_time = time_sampling.getSampleTime(0)
+                    end_time = time_sampling.getSampleTime(num_samples - 1)
+
+                    # Calculate time per sample
+                    if num_samples > 1:
+                        time_per_sample = (end_time - start_time) / (num_samples - 1)
+                    else:
+                        time_per_sample = 1.0 / 24.0  # Default to 24fps
+
+                    return (start_time, end_time, num_samples, time_per_sample)
+
+            return None
+        except Exception:
+            return None
+
     def get_transform_at_time(self, obj, time_seconds, maya_compat=False):
         """Get transform data (position, rotation, scale) at a specific time
 

@@ -28,7 +28,7 @@ class AnimationDetector:
         """
         self.tolerance = tolerance
 
-    def detect_vertex_animation(self, reader, mesh_obj, frame_count, fps):
+    def detect_vertex_animation(self, reader, mesh_obj, frame_count, fps, start_time=0.0):
         """Detect if a mesh has vertex animation (deformation)
 
         Samples vertex positions across multiple frames to detect changes.
@@ -39,14 +39,14 @@ class AnimationDetector:
             mesh_obj: Mesh object to analyze
             frame_count: Total number of frames in the animation
             fps: Frames per second
+            start_time: Time offset for first frame (from file's time sampling)
 
         Returns:
             bool: True if vertex animation detected, False otherwise
         """
         try:
             # Get first frame positions as baseline
-            first_time = 1.0 / fps
-            first_data = reader.get_mesh_data_at_time(mesh_obj, first_time)
+            first_data = reader.get_mesh_data_at_time(mesh_obj, start_time)
             first_positions = first_data['positions']
             num_verts = len(first_positions)
 
@@ -61,7 +61,8 @@ class AnimationDetector:
 
             # Check sampled frames for vertex position changes
             for frame in range(2, frame_count + 1, sample_interval):
-                time_seconds = frame / fps
+                # Frame 1 = start_time, Frame 2 = start_time + 1/fps, etc.
+                time_seconds = start_time + (frame - 1) / fps
                 mesh_data = reader.get_mesh_data_at_time(mesh_obj, time_seconds)
                 positions = mesh_data['positions']
 
@@ -81,7 +82,7 @@ class AnimationDetector:
             # If we can't read the mesh, assume no vertex animation
             return False
 
-    def detect_transform_animation(self, reader, obj, frame_count, fps):
+    def detect_transform_animation(self, reader, obj, frame_count, fps, start_time=0.0):
         """Detect if an object has transform animation
 
         Args:
@@ -89,16 +90,16 @@ class AnimationDetector:
             obj: Object to analyze (transform/xform)
             frame_count: Total number of frames
             fps: Frames per second
+            start_time: Time offset for first frame (from file's time sampling)
 
         Returns:
             bool: True if transform animation detected, False otherwise
         """
         try:
             # Get first and last frame transforms
-            first_time = 1.0 / fps
-            last_time = frame_count / fps
+            last_time = start_time + (frame_count - 1) / fps
 
-            first_pos, first_rot, first_scale = reader.get_transform_at_time(obj, first_time)
+            first_pos, first_rot, first_scale = reader.get_transform_at_time(obj, start_time)
             last_pos, last_rot, last_scale = reader.get_transform_at_time(obj, last_time)
 
             # Check if position changed
@@ -121,13 +122,14 @@ class AnimationDetector:
         except Exception:
             return False
 
-    def analyze_scene(self, reader, frame_count, fps):
+    def analyze_scene(self, reader, frame_count, fps, start_time=0.0):
         """Analyze entire scene and categorize all meshes by animation type
 
         Args:
             reader: BaseReader instance (AlembicReader or USDReader)
             frame_count: Total number of frames
             fps: Frames per second
+            start_time: Time offset for first frame (from file's time sampling)
 
         Returns:
             dict: Animation analysis with keys:
@@ -147,7 +149,7 @@ class AnimationDetector:
             mesh_name = mesh_obj.getName()
 
             # Check for vertex animation first (most important for AE)
-            has_vertex_anim = self.detect_vertex_animation(reader, mesh_obj, frame_count, fps)
+            has_vertex_anim = self.detect_vertex_animation(reader, mesh_obj, frame_count, fps, start_time)
 
             if has_vertex_anim:
                 result['vertex_animated'].append(mesh_name)
@@ -158,7 +160,7 @@ class AnimationDetector:
             has_transform_anim = False
 
             if parent:
-                has_transform_anim = self.detect_transform_animation(reader, parent, frame_count, fps)
+                has_transform_anim = self.detect_transform_animation(reader, parent, frame_count, fps, start_time)
 
             if has_transform_anim:
                 result['transform_only'].append(mesh_name)

@@ -23,12 +23,6 @@ class AnimationType(Enum):
     BLEND_SHAPE = "blend_shape"  # Vertex animation via blend shapes (exportable to FBX)
 
 
-class CoordinateSpace(Enum):
-    """Coordinate space for mesh vertex positions"""
-    LOCAL = "local"   # Vertices relative to transform origin
-    WORLD = "world"   # Vertices in world/scene coordinates (baked transforms)
-
-
 # === ROTATION DECOMPOSITION FUNCTIONS ===
 # These extract XYZ Euler angles from a 3x3 rotation matrix.
 # Moved from alembic_reader.py to enable lazy computation in Keyframe.
@@ -285,16 +279,17 @@ class CameraData:
 class MeshGeometry:
     """Static mesh geometry data (first frame)
 
+    Vertex positions are always stored in local (object) space.
+    Readers are responsible for extracting vertices in local space.
+
     Attributes:
-        positions: List of vertex positions as [x, y, z] tuples
+        positions: List of vertex positions in LOCAL space as [x, y, z] tuples
         indices: Face vertex indices (flattened)
         counts: Number of vertices per face
-        coordinate_space: Whether positions are in local or world space
     """
     positions: List[Tuple[float, float, float]]
     indices: List[int]
     counts: List[int]
-    coordinate_space: CoordinateSpace = CoordinateSpace.WORLD
 
 
 @dataclass
@@ -384,30 +379,13 @@ class MeshData:
     def get_local_positions(self) -> List[Tuple[float, float, float]]:
         """Get vertex positions in local (object) space
 
-        If geometry is already in local space, returns positions directly.
-        If geometry is in world space, transforms using first keyframe's
-        world transform.
+        SceneData always stores vertices in local space, so this method
+        simply returns geometry.positions. Kept for backward compatibility.
 
         Returns:
             List of vertex positions in local space
         """
-        if self.geometry.coordinate_space == CoordinateSpace.LOCAL:
-            return self.geometry.positions
-
-        # Need to transform from world to local
-        if not self.keyframes:
-            # No transform data, return as-is
-            return self.geometry.positions
-
-        # Use first keyframe's transform
-        kf = self.keyframes[0]
-
-        return transform_vertices_to_local(
-            positions=self.geometry.positions,
-            world_position=kf.position,
-            rotation_matrix=kf._rotation_matrix,
-            scale=kf.scale
-        )
+        return self.geometry.positions
 
 
 @dataclass
@@ -438,6 +416,7 @@ class SceneMetadata:
         height: Render height in pixels
         fps: Frames per second
         frame_count: Total number of frames
+        start_frame: First frame number (e.g., 1 or 1001 for VFX pipelines)
         footage_path: Path to associated footage file (if embedded in scene)
         source_file_path: Absolute path to the source file
         source_format_name: Human-readable format name ("Alembic" or "USD")
@@ -446,6 +425,7 @@ class SceneMetadata:
     height: int
     fps: float
     frame_count: int
+    start_frame: int
     footage_path: Optional[str]
     source_file_path: str
     source_format_name: str

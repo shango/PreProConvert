@@ -88,6 +88,21 @@ class BaseReader(ABC):
         """
         pass
 
+    def get_time_range(self) -> Optional[Tuple[float, float, int, float]]:
+        """Get the time range of animation in the file
+
+        Optional method - returns the actual time range from the file's
+        time sampling. Used to support files that don't start at time 0.
+
+        Returns:
+            tuple: (start_time, end_time, num_samples, time_per_sample) or None
+                - start_time: Time in seconds of first sample
+                - end_time: Time in seconds of last sample
+                - num_samples: Total number of time samples
+                - time_per_sample: Time between samples (1/fps)
+        """
+        return None  # Default: not implemented, use fps-based calculation
+
     @abstractmethod
     def get_transform_at_time(self, obj: Any, time_seconds: float,
                               maya_compat: bool = False) -> Tuple[List[float], List[float], List[float]]:
@@ -220,9 +235,23 @@ class BaseReader(ABC):
         )
         from core.animation_detector import AnimationDetector
 
-        # Step 1: Analyze animation types
+        # Get actual time range from file (if available)
+        time_range = self.get_time_range()
+        if time_range:
+            start_time, end_time, num_samples, time_per_sample = time_range
+            # Use actual fps from file if significantly different
+            detected_fps = 1.0 / time_per_sample if time_per_sample > 0 else fps
+            # Calculate start frame from start time (e.g., 41.666s at 24fps = frame 1001)
+            start_frame = round(start_time * fps) + 1
+        else:
+            # Fallback: assume animation starts at time 0, frame 1
+            start_time = 0.0
+            time_per_sample = 1.0 / fps
+            start_frame = 1
+
+        # Step 1: Analyze animation types (pass start_time)
         detector = AnimationDetector()
-        animation_analysis = detector.analyze_scene(self, frame_count, fps)
+        animation_analysis = detector.analyze_scene(self, frame_count, fps, start_time)
 
         # Step 2: Build parent map once
         parent_map = self.get_parent_map()
@@ -234,6 +263,7 @@ class BaseReader(ABC):
             height=height,
             fps=fps,
             frame_count=frame_count,
+            start_frame=start_frame,
             footage_path=self.extract_footage_path(),
             source_file_path=str(self.file_path.resolve()),
             source_format_name=self.get_format_name()
@@ -257,7 +287,7 @@ class BaseReader(ABC):
             transform_obj = cam_obj
 
             # Get camera properties (first frame)
-            props = self.get_camera_properties(cam_obj, 1.0 / fps)
+            props = self.get_camera_properties(cam_obj, start_time)
             cam_props = CameraProperties(
                 focal_length=props['focal_length'],
                 h_aperture=props['h_aperture'],
@@ -265,7 +295,7 @@ class BaseReader(ABC):
             )
 
             # Extract keyframes for all frames (both rotation modes)
-            keyframes = self._extract_keyframes(transform_obj, fps, frame_count)
+            keyframes = self._extract_keyframes(transform_obj, fps, frame_count, start_time)
 
             cameras.append(CameraData(
                 name=cam_name,
@@ -313,7 +343,9 @@ class BaseReader(ABC):
                 anim_type = AnimationType.STATIC
 
             # Get first frame geometry
-            mesh_data = self.get_mesh_data_at_time(mesh_obj, 1.0 / fps)
+            # Both Alembic and USD store mesh vertices in local (object) space
+            # SceneData always stores vertices in local space (normalized)
+            mesh_data = self.get_mesh_data_at_time(mesh_obj, start_time)
             geometry = MeshGeometry(
                 positions=[(p[0], p[1], p[2]) for p in mesh_data['positions']],
                 indices=list(mesh_data['indices']),
@@ -321,14 +353,15 @@ class BaseReader(ABC):
             )
 
             # Extract transform keyframes
-            keyframes = self._extract_keyframes(transform_obj, fps, frame_count)
+            keyframes = self._extract_keyframes(transform_obj, fps, frame_count, start_time)
 
             # Extract vertex positions per frame if vertex-animated (raw, not blend shape)
             vertex_positions = None
             if anim_type == AnimationType.VERTEX_ANIMATED:
                 vertex_positions = {}
                 for frame in range(1, frame_count + 1):
-                    time_seconds = frame / fps
+                    # Use start_time offset: Frame 1 = start_time, Frame 2 = start_time + 1/fps
+                    time_seconds = start_time + (frame - 1) / fps
                     frame_mesh_data = self.get_mesh_data_at_time(mesh_obj, time_seconds)
                     vertex_positions[frame] = [
                         (p[0], p[1], p[2]) for p in frame_mesh_data['positions']
@@ -370,7 +403,7 @@ class BaseReader(ABC):
             parent = parent_map.get(xform_name)
             parent_name = parent.getName() if parent else None
 
-            keyframes = self._extract_keyframes(xform_obj, fps, frame_count)
+            keyframes = self._extract_keyframes(xform_obj, fps, frame_count, start_time)
             transforms.append(TransformData(
                 name=xform_name,
                 parent_name=parent_name,
@@ -403,7 +436,7 @@ class BaseReader(ABC):
             hierarchy=hierarchy
         )
 
-    def _extract_keyframes(self, obj: Any, fps: int, frame_count: int) -> List['Keyframe']:
+    def _extract_keyframes(self, obj: Any, fps: int, frame_count: int, start_time: float = 0.0) -> List['Keyframe']:
         """Extract keyframes with rotation data
 
         Uses matrix-based approach if available (single decomposition call with
@@ -413,6 +446,7 @@ class BaseReader(ABC):
             obj: Scene object to sample
             fps: Frames per second
             frame_count: Total number of frames
+            start_time: Time offset for first frame (from file's time sampling)
 
         Returns:
             List[Keyframe]: Animation keyframes for all frames
@@ -422,10 +456,12 @@ class BaseReader(ABC):
         keyframes = []
 
         # Check if matrix-based extraction is available (more efficient)
-        use_matrix = self.get_transform_with_matrix_at_time(obj, 1.0 / fps) is not None
+        # Test at start_time (frame 1's time)
+        use_matrix = self.get_transform_with_matrix_at_time(obj, start_time) is not None
 
         for frame in range(1, frame_count + 1):
-            time_seconds = frame / fps
+            # Frame 1 = start_time, Frame 2 = start_time + 1/fps, etc.
+            time_seconds = start_time + (frame - 1) / fps
 
             if use_matrix:
                 # New efficient path: single call, lazy rotation decomposition

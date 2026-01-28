@@ -621,11 +621,23 @@ class FBXExporter(BaseExporter):
             rot = (0, 0, 0)
 
         focal_length = cam_data.properties.focal_length
+        # Convert aperture from cm (Alembic/SceneData) to inches (FBX)
+        # 1 cm = 0.393701 inches
+        h_aperture_cm = cam_data.properties.h_aperture
+        v_aperture_cm = cam_data.properties.v_aperture
+        film_width_inches = h_aperture_cm * 0.393701
+        film_height_inches = v_aperture_cm * 0.393701
+        film_aspect = film_width_inches / film_height_inches if film_height_inches > 0 else 1.77778
 
         # Camera as NodeAttribute (Maya-compatible format)
         lines.extend([
             f'    NodeAttribute: {cam_id}, "NodeAttribute::{cam_name}", "Camera" {{',
             '        Properties70:  {',
+            f'            P: "FilmWidth", "Number", "", "A",{film_width_inches:.6f}',
+            f'            P: "FilmHeight", "Number", "", "A",{film_height_inches:.6f}',
+            f'            P: "FilmAspectRatio", "double", "Number", "",{film_aspect:.10f}',
+            '            P: "ApertureMode", "enum", "", "",3',
+            '            P: "GateFit", "enum", "", "",2',
             f'            P: "FocalLength", "Number", "", "A",{focal_length}',
             '            P: "NearPlane", "double", "Number", "",0.1',
             '            P: "FarPlane", "double", "Number", "",10000',
@@ -703,14 +715,13 @@ class FBXExporter(BaseExporter):
             scale = (1, 1, 1)
 
         # === GEOMETRY ===
-        # Get local-space positions using the proper world-to-local transformation
-        # This handles rotation and scale, not just translation offset
-        local_positions = mesh_data.get_local_positions()
+        # SceneData always stores vertices in local (object) space
+        positions = mesh_data.geometry.positions
         indices = mesh_data.geometry.indices
         counts = mesh_data.geometry.counts
 
         # Apply any coordinate system conversion (pass-through for Y-up)
-        converted_positions = [self._convert_position(p) for p in local_positions]
+        converted_positions = [self._convert_position(p) for p in positions]
 
         # Flatten positions for FBX format
         pos_array = []
