@@ -335,6 +335,11 @@ class USDExporter(BaseExporter):
     def _export_mesh_with_vertex_anim(self, stage, mesh, usd_path, frame_count):
         """Export mesh with vertex animation (time-sampled point positions)
 
+        For vertex-animated meshes, the vertex positions contain the full
+        world-space deformation. We use identity transform to avoid
+        double-transformation (common with Nuke/compositing app exports
+        that bake world positions into vertices).
+
         Args:
             stage: USD stage
             mesh: MeshData instance from SceneData
@@ -373,28 +378,21 @@ class USDExporter(BaseExporter):
             points = self.Vt.Vec3fArray([self._make_vec3f(p) for p in geometry.positions])
             points_attr.Set(points)
 
-        # Animate transform (if transform is also animated)
+        # For vertex-animated meshes, use identity transform
+        # Vertex positions from Alembic (especially from Nuke/compositing apps)
+        # are typically in world space - the deformation IS the final position.
+        # Applying additional transform would cause double-transformation.
         xformable = self.UsdGeom.Xformable(usd_mesh)
 
-        # Create transform ops with EXPLICIT precision for Maya compatibility
+        # Create identity transform ops (required for USD structure)
         translate_op = xformable.AddTranslateOp(self.UsdGeom.XformOp.PrecisionDouble)
         rotate_op = xformable.AddRotateXYZOp(self.UsdGeom.XformOp.PrecisionFloat)
         scale_op = xformable.AddScaleOp(self.UsdGeom.XformOp.PrecisionFloat)
 
-        # Set default values FIRST to establish attributes (required for animation)
-        if mesh.keyframes:
-            kf = mesh.keyframes[0]
-            translate_op.Set(self._make_vec3d(kf.position))
-            rotate_op.Set(self._make_vec3f(kf.rotation_maya))
-            scale_op.Set(self._make_vec3f(kf.scale))
-
-        # THEN set time-sampled animation from pre-extracted keyframes
-        for kf in mesh.keyframes:
-            # Y-up coordinate system - direct copy from source
-            # Use float for time code (matches USD convention)
-            translate_op.Set(self._make_vec3d(kf.position), time=float(kf.frame))
-            rotate_op.Set(self._make_vec3f(kf.rotation_maya), time=float(kf.frame))
-            scale_op.Set(self._make_vec3f(kf.scale), time=float(kf.frame))
+        # Set identity transform (no translation, no rotation, unit scale)
+        translate_op.Set(self.Gf.Vec3d(0.0, 0.0, 0.0))
+        rotate_op.Set(self.Gf.Vec3f(0.0, 0.0, 0.0))
+        scale_op.Set(self.Gf.Vec3f(1.0, 1.0, 1.0))
 
     def _export_locator(self, stage, transform, usd_path, frame_count):
         """Export animated locator/tracker to USD as pure Xform

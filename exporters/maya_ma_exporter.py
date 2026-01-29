@@ -491,15 +491,16 @@ class MayaMAExporter(BaseExporter):
         return lines
 
     def _export_vertex_animated_mesh(self, mesh_data, mesh_name, source_file_path, source_file_type, parent_name=None):
-        """Export vertex-animated mesh via source file reference
+        """Export vertex-animated mesh with embedded first-frame geometry
 
-        For Alembic sources: Creates AlembicNode reference
-        For USD sources: Adds comment noting manual USD Stage setup required
+        Vertex-animated meshes are exported with their first-frame geometry embedded
+        directly in the Maya file. This ensures the mesh is visible in Maya even
+        without the original source file. A comment notes how to reconnect animation.
 
         Args:
             mesh_data: MeshData from SceneData
             mesh_name: Sanitized mesh name
-            source_file_path: Path to source file
+            source_file_path: Path to source file (for reference comment)
             source_file_type: 'alembic' or 'usd'
             parent_name: Optional parent node name for hierarchy
         """
@@ -511,38 +512,104 @@ class MayaMAExporter(BaseExporter):
         else:
             lines.append(f'createNode transform -n "{mesh_name}";')
 
+        # Set initial transform values from first keyframe (using Maya-compatible rotation)
+        if mesh_data.keyframes:
+            kf = mesh_data.keyframes[0]
+            pos = kf.position
+            rot = kf.rotation_maya  # Use Maya-compatible rotation
+            scale = kf.scale
+            lines.append(f'    setAttr ".t" -type "double3" {pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f};')
+            lines.append(f'    setAttr ".r" -type "double3" {rot[0]:.6f} {rot[1]:.6f} {rot[2]:.6f};')
+            lines.append(f'    setAttr ".s" -type "double3" {scale[0]:.6f} {scale[1]:.6f} {scale[2]:.6f};')
+
+        # Get mesh geometry from SceneData (first frame)
+        positions = mesh_data.geometry.positions
+        indices = mesh_data.geometry.indices
+        counts = mesh_data.geometry.counts
+
+        # Create mesh shape with embedded geometry
         shape_name = f"{mesh_name}Shape"
         self.mesh_shapes.append(shape_name)
 
-        lines.extend([
-            f'createNode mesh -n "{shape_name}" -p "{mesh_name}";',
-            f'    setAttr -k off ".v";',
-            f'    setAttr ".vir" yes;',
-            f'    setAttr ".vif" yes;',
-        ])
+        lines.append(f'createNode mesh -n "{shape_name}" -p "{mesh_name}";')
+        lines.append(f'    setAttr -k off ".v";')
+        lines.append(f'    setAttr ".vir" yes;')
+        lines.append(f'    setAttr ".vif" yes;')
 
+        num_verts = len(positions)
+        num_faces = len(counts)
+
+        # Build edges from face data
+        edges = []
+        edge_map = {}
+        idx_offset = 0
+
+        for count in counts:
+            face_verts = [indices[idx_offset + i] for i in range(count)]
+            for i in range(count):
+                v1, v2 = face_verts[i], face_verts[(i + 1) % count]
+                edge_key = (min(v1, v2), max(v1, v2))
+                if edge_key not in edge_map:
+                    edge_map[edge_key] = len(edges)
+                    edges.append((v1, v2))
+            idx_offset += count
+
+        num_edges = len(edges)
+
+        # Build the mesh data in official Maya format using setAttr -type mesh
+        mesh_data_parts = []
+
+        # Vertices: "v" count x y z x y z ...
+        mesh_data_parts.append(f'"v" {num_verts}')
+        for pos in positions:
+            mesh_data_parts.append(f'{pos[0]:.6f} {pos[1]:.6f} {pos[2]:.6f}')
+
+        # Vertex normals: "vn" 0 (required, set to 0)
+        mesh_data_parts.append('"vn" 0')
+
+        # Edges: "e" count v1 v2 "smooth" v1 v2 "smooth" ...
+        mesh_data_parts.append(f'"e" {num_edges}')
+        for v1, v2 in edges:
+            mesh_data_parts.append(f'{v1} {v2} "smooth"')
+
+        # Faces: "face" "l" edgeCount edge1 edge2 ... "face" "l" ...
+        idx_offset = 0
+        for face_idx, count in enumerate(counts):
+            face_verts = [indices[idx_offset + i] for i in range(count)]
+            # Reverse winding order - Alembic uses opposite convention from Maya
+            face_verts.reverse()
+
+            # Get edge indices for this face
+            face_edges = []
+            for i in range(count):
+                v1, v2 = face_verts[i], face_verts[(i + 1) % count]
+                edge_key = (min(v1, v2), max(v1, v2))
+                edge_idx = edge_map[edge_key]
+                # Check edge direction - negative means reversed
+                if edges[edge_idx][0] == v1:
+                    face_edges.append(edge_idx)
+                else:
+                    face_edges.append(-edge_idx - 1)
+
+            edge_str = ' '.join(str(e) for e in face_edges)
+            mesh_data_parts.append(f'"face" "l" {count} {edge_str}')
+            idx_offset += count
+
+        # Write mesh data as single setAttr command
+        lines.append(f'    setAttr ".o" -type "mesh"')
+        lines.append(f'        {" ".join(mesh_data_parts)};')
+
+        # Add comment about vertex animation
         if source_file_path:
-            if source_file_type == 'alembic':
-                # Alembic source: Use AlembicNode for vertex animation
-                alembic_node = f"{mesh_name}_AlembicNode"
-                lines.extend([
-                    f'createNode AlembicNode -n "{alembic_node}";',
-                    f'    setAttr ".abc_File" -type "string" "{self._mel_escape_string(source_file_path)}";',
-                    f'    setAttr ".objectPath" -type "string" "{mesh_data.full_path}";',
-                    f'connectAttr "time1.outTime" "{alembic_node}.time";',
-                    f'connectAttr "{alembic_node}.outPolyMesh[0]" "{shape_name}.inMesh";',
-                ])
-            else:
-                # USD source: Add comment noting manual setup required
-                lines.extend([
-                    f'// NOTE: Vertex-animated mesh "{mesh_name}" requires manual USD Stage setup',
-                    f'// Source USD file: {self._mel_escape_string(source_file_path)}',
-                    f'// Object path: {mesh_data.full_path}',
-                    f'// To connect vertex animation:',
-                    f'//   1. Load mayaUsdPlugin',
-                    f'//   2. Create USD Stage from source file',
-                    f'//   3. Connect appropriate USD prim to this mesh',
-                ])
+            source_name = source_file_path.split('/')[-1].split('\\')[-1]
+            lines.extend([
+                f'',
+                f'// NOTE: This mesh has vertex animation (deformation)',
+                f'// First-frame geometry is embedded above',
+                f'// To restore animation, use AlembicNode with original file:',
+                f'//   Source: {source_name}',
+                f'//   Object path: {mesh_data.full_path}',
+            ])
 
         return lines
 
