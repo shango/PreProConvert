@@ -499,7 +499,12 @@
         <!-- Results Section -->
         <div id="resultsSection" class="section hidden">
             <h3>Conversion Complete!</h3>
-            <a id="downloadBtn" href="#" class="btn btn-success btn-block">Download Results (ZIP)</a>
+            <p id="downloadNotice" style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Downloads available for 15 minutes</p>
+            <button id="downloadBtn" class="btn btn-success btn-block">Download Results (ZIP)</button>
+            <div id="downloadExpired" class="error-message hidden" style="margin-top: 1rem;">
+                Download expired. Results are available for 15 minutes after conversion.<br>
+                Please re-upload and convert your file.
+            </div>
             <button id="newConversionBtn" class="btn btn-block" style="margin-top: 1rem;">New Conversion</button>
         </div>
 
@@ -677,7 +682,6 @@
                 const data = JSON.parse(e.data);
 
                 if (data.status === 'completed') {
-                    downloadBtn.href = `/api/jobs/${currentJobId}/download`;
                     // Show results while keeping progress log visible
                     showSectionWithLog('results');
                 } else {
@@ -733,7 +737,6 @@
                 const data = await response.json();
 
                 if (data.status === 'completed') {
-                    downloadBtn.href = `/api/jobs/${currentJobId}/download`;
                     showSectionWithLog('results');
                 } else if (data.status === 'failed') {
                     errorMessage.textContent = data.error || 'Unknown error occurred';
@@ -744,6 +747,48 @@
             }
         }
 
+        // Download handler with expiration check
+        downloadBtn.addEventListener('click', async () => {
+            if (!currentJobId) return;
+
+            try {
+                const response = await fetch(`/api/jobs/${currentJobId}/download`);
+
+                if (response.status === 410) {
+                    // Download expired
+                    document.getElementById('downloadExpired').classList.remove('hidden');
+                    downloadBtn.classList.add('hidden');
+                    document.getElementById('downloadNotice').classList.add('hidden');
+                    return;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Download failed');
+                }
+
+                // Download the file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${uploadedBaseName}_conv_results.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+            } catch (error) {
+                if (error.message.includes('expired') || error.message.includes('15 minutes')) {
+                    document.getElementById('downloadExpired').classList.remove('hidden');
+                    downloadBtn.classList.add('hidden');
+                    document.getElementById('downloadNotice').classList.add('hidden');
+                } else {
+                    alert('Download failed: ' + error.message);
+                }
+            }
+        });
+
         // New conversion / retry
         document.getElementById('newConversionBtn').addEventListener('click', resetApp);
         document.getElementById('retryBtn').addEventListener('click', resetApp);
@@ -751,6 +796,10 @@
         function resetApp() {
             currentJobId = null;
             if (eventSource) eventSource.close();
+            // Reset download section state
+            downloadBtn.classList.remove('hidden');
+            document.getElementById('downloadExpired').classList.add('hidden');
+            document.getElementById('downloadNotice').classList.remove('hidden');
             showSection('dropzone');
         }
 

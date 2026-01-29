@@ -232,7 +232,10 @@ async def download_results(job_id: str):
     """Download conversion results as ZIP"""
     job = job_manager.get_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=410,  # 410 Gone - resource no longer available
+            detail="Download expired. Results are available for 15 minutes after conversion. Please re-upload and convert your file."
+        )
 
     if job.status != JobStatus.COMPLETED:
         raise HTTPException(
@@ -241,7 +244,10 @@ async def download_results(job_id: str):
         )
 
     if not job.zip_path or not Path(job.zip_path).exists():
-        raise HTTPException(status_code=404, detail="Results file not found")
+        raise HTTPException(
+            status_code=410,  # 410 Gone - resource no longer available
+            detail="Download expired. Results are available for 15 minutes after conversion. Please re-upload and convert your file."
+        )
 
     return FileResponse(
         path=job.zip_path,
