@@ -154,21 +154,31 @@ class AnimationDetector:
         total = len(meshes)
 
         for idx, mesh_obj in enumerate(meshes, 1):
-            mesh_name = mesh_obj.getName()
-            logger.info(f"  Analyzing mesh {idx}/{total}: {mesh_name}")
+            shape_name = mesh_obj.getName()
+
+            # Get parent transform for display name (shape names may all be "mesh" in Nuke exports)
+            parent = reader.get_parent_of(mesh_obj)
+            if parent and reader._uses_shape_transform_pattern():
+                display_name = parent.getName()
+            else:
+                display_name = shape_name
+
+            # Get full path for unique identification
+            full_path = reader._get_full_path(mesh_obj) if hasattr(reader, '_get_full_path') else display_name
+
+            logger.info(f"  Analyzing mesh {idx}/{total}: {display_name} (shape: {shape_name}, path: {full_path})")
 
             # Check for vertex animation first (most important for AE)
             has_vertex_anim = self.detect_vertex_animation(reader, mesh_obj, frame_count, fps, start_time)
 
             if has_vertex_anim:
                 logger.info(f"    -> vertex animated")
-                result['vertex_animated'].append(mesh_name)
+                result['vertex_animated'].append(display_name)
                 continue
 
             # Check for transform animation on parent
             # Use get_parent_of for direct parent lookup (avoids name collision
             # when multiple meshes share the same name)
-            parent = reader.get_parent_of(mesh_obj)
             has_transform_anim = False
 
             if parent:
@@ -176,10 +186,10 @@ class AnimationDetector:
 
             if has_transform_anim:
                 logger.info(f"    -> transform only")
-                result['transform_only'].append(mesh_name)
+                result['transform_only'].append(display_name)
             else:
                 logger.info(f"    -> static")
-                result['static'].append(mesh_name)
+                result['static'].append(display_name)
 
         return result
 
