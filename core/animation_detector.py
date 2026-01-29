@@ -88,7 +88,7 @@ class AnimationDetector:
 
         except Exception:
             # If we can't read the mesh, assume no vertex animation
-            return False
+            return False, 0.0
 
     def detect_transform_animation(self, reader, obj, frame_count, fps, start_time=0.0):
         """Detect if an object has transform animation
