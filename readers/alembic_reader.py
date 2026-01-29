@@ -363,6 +363,23 @@ class AlembicReader(BaseReader):
             'counts': counts
         }
 
+    def get_mesh_sample_count(self, mesh_obj):
+        """Get the number of time samples for a mesh's positions
+
+        Args:
+            mesh_obj: IPolyMesh object
+
+        Returns:
+            int: Number of position samples (1 = constant, >1 = animated)
+        """
+        try:
+            poly = IPolyMesh(mesh_obj, WrapExistingFlag.kWrapExisting)
+            schema = poly.getSchema()
+            positions_prop = schema.getPositionsProperty()
+            return positions_prop.getNumSamples()
+        except Exception:
+            return 1
+
     def get_camera_properties(self, cam_obj, time_seconds=None):
         """Get camera properties at a specific time
 

@@ -67,10 +67,12 @@ class AnimationDetector:
 
             # Check sampled frames for vertex position changes
             max_delta_seen = 0.0
+            frames_checked = 0
             for frame in range(2, frame_count + 1, sample_interval):
                 time_seconds = start_time + (frame - 1) / fps
                 mesh_data = reader.get_mesh_data_at_time(mesh_obj, time_seconds)
                 positions = mesh_data['positions']
+                frames_checked += 1
 
                 # Vectorized comparison with numpy
                 current_arr = np.array(positions, dtype=np.float64)
@@ -83,6 +85,13 @@ class AnimationDetector:
                     logger.info(f"    Vertex animation detected: max delta={frame_max_delta:.6f} at frame {frame} (tolerance={self.tolerance})")
                     # Return the delta value along with True
                     return True, frame_max_delta
+
+            # Log diagnostic info for meshes with many vertices that weren't detected as animated
+            if num_verts > 1000:
+                mesh_name = mesh_obj.getName()
+                # Check if reader has sample count method (Alembic-specific)
+                sample_count = reader.get_mesh_sample_count(mesh_obj) if hasattr(reader, 'get_mesh_sample_count') else 'unknown'
+                logger.info(f"    Large mesh ({num_verts} verts) NOT vertex animated: max_delta={max_delta_seen:.8f}, checked {frames_checked} frames, start_time={start_time:.3f}, position_samples={sample_count}")
 
             return False, max_delta_seen
 
