@@ -81,9 +81,10 @@ class AnimationDetector:
                 if frame_max_delta > self.tolerance:
                     mesh_name = mesh_obj.getName()
                     logger.info(f"    Vertex animation detected: max delta={frame_max_delta:.6f} at frame {frame} (tolerance={self.tolerance})")
-                    return True
+                    # Return the delta value along with True
+                    return True, frame_max_delta
 
-            return False
+            return False, max_delta_seen
 
         except Exception:
             # If we can't read the mesh, assume no vertex animation
@@ -146,6 +147,7 @@ class AnimationDetector:
         """
         result = {
             'vertex_animated': [],
+            'vertex_animated_deltas': {},  # Track delta values for diagnosis
             'transform_only': [],
             'static': []
         }
@@ -169,11 +171,12 @@ class AnimationDetector:
             logger.info(f"  Analyzing mesh {idx}/{total}: {display_name} (shape: {shape_name}, path: {full_path})")
 
             # Check for vertex animation first (most important for AE)
-            has_vertex_anim = self.detect_vertex_animation(reader, mesh_obj, frame_count, fps, start_time)
+            has_vertex_anim, vertex_delta = self.detect_vertex_animation(reader, mesh_obj, frame_count, fps, start_time)
 
             if has_vertex_anim:
-                logger.info(f"    -> vertex animated")
+                logger.info(f"    -> vertex animated (delta={vertex_delta:.6f})")
                 result['vertex_animated'].append(display_name)
+                result['vertex_animated_deltas'][display_name] = vertex_delta
                 continue
 
             # Check for transform animation on parent
@@ -209,8 +212,43 @@ class AnimationDetector:
         lines.append(f"  - Static: {len(animation_data['static'])} meshes")
 
         if animation_data['vertex_animated']:
-            lines.append("\n  Vertex Animated Meshes:")
+            deltas = animation_data.get('vertex_animated_deltas', {})
+
+            # Categorize by delta magnitude
+            tiny_delta = []   # < 0.001 (likely floating point noise)
+            small_delta = []  # 0.001 - 0.1 (small movement)
+            large_delta = []  # > 0.1 (clear animation)
+
             for name in animation_data['vertex_animated']:
-                lines.append(f"    - {name}")
+                delta = deltas.get(name, 0)
+                if delta < 0.001:
+                    tiny_delta.append((name, delta))
+                elif delta < 0.1:
+                    small_delta.append((name, delta))
+                else:
+                    large_delta.append((name, delta))
+
+            lines.append("\n  Vertex Animated Meshes:")
+
+            if large_delta:
+                lines.append(f"    Clear animation (delta > 0.1): {len(large_delta)}")
+                for name, delta in large_delta[:5]:  # Show first 5
+                    lines.append(f"      - {name} (delta={delta:.4f})")
+                if len(large_delta) > 5:
+                    lines.append(f"      ... and {len(large_delta) - 5} more")
+
+            if small_delta:
+                lines.append(f"    Small movement (0.001 < delta < 0.1): {len(small_delta)}")
+                for name, delta in small_delta[:3]:
+                    lines.append(f"      - {name} (delta={delta:.6f})")
+                if len(small_delta) > 3:
+                    lines.append(f"      ... and {len(small_delta) - 3} more")
+
+            if tiny_delta:
+                lines.append(f"    Tiny delta (< 0.001, possible FP noise): {len(tiny_delta)}")
+                for name, delta in tiny_delta[:3]:
+                    lines.append(f"      - {name} (delta={delta:.8f})")
+                if len(tiny_delta) > 3:
+                    lines.append(f"      ... and {len(tiny_delta) - 3} more")
 
         return "\n".join(lines)
