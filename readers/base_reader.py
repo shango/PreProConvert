@@ -76,6 +76,23 @@ class BaseReader(ABC):
         """
         pass
 
+    def get_parent_of(self, obj: Any) -> Any:
+        """Get the direct parent of a scene object
+
+        Uses the object's own parent reference (e.g., Alembic getParent(),
+        USD prim.GetParent()). This avoids name-based lookup collisions
+        when multiple objects share the same name.
+
+        Args:
+            obj: Scene object
+
+        Returns:
+            Parent object, or None if at root
+        """
+        if hasattr(obj, 'getParent'):
+            return obj.getParent()
+        return None
+
     @abstractmethod
     def detect_frame_count(self, fps: int = 24) -> int:
         """Auto-detect frame count from file time sampling
@@ -270,10 +287,7 @@ class BaseReader(ABC):
         detector = AnimationDetector()
         animation_analysis = detector.analyze_scene(self, frame_count, fps, start_time)
 
-        # Step 2: Build parent map once
-        parent_map = self.get_parent_map()
-
-        # Step 3: Extract metadata
+        # Step 2: Extract metadata (parent_map no longer needed - use get_parent_of)
         width, height = self.extract_render_resolution()
         metadata = SceneMetadata(
             width=width,
@@ -292,7 +306,7 @@ class BaseReader(ABC):
         _logger.info(f"Found {len(cam_objects)} cameras")
         for cam_obj in cam_objects:
             cam_name = cam_obj.getName()
-            parent = parent_map.get(cam_name)
+            parent = self.get_parent_of(cam_obj)
 
             # Determine parent_name for display purposes
             # Alembic/Maya: cameras are shape nodes under transforms — use parent name
@@ -337,7 +351,7 @@ class BaseReader(ABC):
 
         for mesh_obj in mesh_objects:
             mesh_name = mesh_obj.getName()
-            parent = parent_map.get(mesh_name)
+            parent = self.get_parent_of(mesh_obj)
 
             # Determine parent_name for display purposes
             # Alembic/Maya: meshes are shape nodes under transforms — use parent name
@@ -441,7 +455,7 @@ class BaseReader(ABC):
             if self._is_organizational_group(xform_obj):
                 continue
 
-            parent = parent_map.get(xform_name)
+            parent = self.get_parent_of(xform_obj)
             parent_name = parent.getName() if parent else None
 
             keyframes = self._extract_keyframes(xform_obj, fps, frame_count, start_time)

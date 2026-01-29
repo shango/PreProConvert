@@ -143,7 +143,6 @@ class AnimationDetector:
             'static': []
         }
 
-        parent_map = reader.get_parent_map()
         meshes = list(reader.get_meshes())
         total = len(meshes)
 
@@ -160,7 +159,9 @@ class AnimationDetector:
                 continue
 
             # Check for transform animation on parent
-            parent = parent_map.get(mesh_name)
+            # Use get_parent_of for direct parent lookup (avoids name collision
+            # when multiple meshes share the same name)
+            parent = reader.get_parent_of(mesh_obj)
             has_transform_anim = False
 
             if parent:
