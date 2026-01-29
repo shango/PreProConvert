@@ -66,6 +66,7 @@ class AnimationDetector:
             sample_interval = max(5, frame_count // 20)
 
             # Check sampled frames for vertex position changes
+            max_delta_seen = 0.0
             for frame in range(2, frame_count + 1, sample_interval):
                 time_seconds = start_time + (frame - 1) / fps
                 mesh_data = reader.get_mesh_data_at_time(mesh_obj, time_seconds)
@@ -73,7 +74,13 @@ class AnimationDetector:
 
                 # Vectorized comparison with numpy
                 current_arr = np.array(positions, dtype=np.float64)
-                if np.any(np.abs(current_arr - first_arr) > self.tolerance):
+                delta = np.abs(current_arr - first_arr)
+                frame_max_delta = np.max(delta)
+                max_delta_seen = max(max_delta_seen, frame_max_delta)
+
+                if frame_max_delta > self.tolerance:
+                    mesh_name = mesh_obj.getName()
+                    logger.info(f"    Vertex animation detected: max delta={frame_max_delta:.6f} at frame {frame} (tolerance={self.tolerance})")
                     return True
 
             return False
